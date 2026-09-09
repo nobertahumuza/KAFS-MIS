@@ -111,18 +111,24 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           'flex items-center h-16 px-4 border-b border-white/10',
           collapsed ? 'justify-center' : 'justify-between'
         )}>
-          {!collapsed && (
+          {!collapsed ? (
             <div className="flex items-center gap-3 min-w-0">
-              <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-[var(--color-gold)] flex items-center justify-center">
-                <svg className="w-6 h-6 text-[var(--color-primary-dark)]" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-                </svg>
-              </div>
+              <img
+                src="/badge.jpg"
+                alt="KAFS SACCO Badge"
+                className="flex-shrink-0 w-9 h-9 rounded-lg object-cover"
+              />
               <div className="min-w-0">
                 <h1 className="text-sm font-bold tracking-wide truncate">{APP_NAME}</h1>
                 <p className="text-[10px] text-white/50 truncate">Management System</p>
               </div>
             </div>
+          ) : (
+            <img
+              src="/badge.jpg"
+              alt="KAFS SACCO"
+              className="w-9 h-9 rounded-lg object-cover"
+            />
           )}
 
           <button

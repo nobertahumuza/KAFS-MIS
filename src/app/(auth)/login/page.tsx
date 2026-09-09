@@ -48,15 +48,11 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-8">
           <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-[var(--color-gold)]/10 mb-4">
-              <svg
-                className="w-12 h-12 text-[var(--color-gold)]"
-                fill="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-              </svg>
-            </div>
+            <img
+              src="/badge.jpg"
+              alt="KAFS SACCO Badge"
+              className="inline-block w-20 h-20 rounded-full object-cover mb-4"
+            />
             <h1 className="text-2xl font-bold text-[var(--color-primary)] dark:text-white">
               KAFS SACCO
             </h1>
