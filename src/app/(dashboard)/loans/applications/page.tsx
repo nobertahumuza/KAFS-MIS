@@ -261,9 +261,9 @@ export default function LoanApplicationsPage() {
   }
 
   const searchMembers = useCallback(async (query: string) => {
-    if (query.length < 2) { setMemberOptions([]); return }
+    if (query.length < 1) { setMemberOptions([]); return }
     try {
-      const res = await fetch(`/api/members?search=${encodeURIComponent(query)}&pageSize=10`)
+      const res = await fetch(`/api/members/search?q=${encodeURIComponent(query)}`)
       if (res.ok) {
         const data = await res.json()
         setMemberOptions(data.data || [])

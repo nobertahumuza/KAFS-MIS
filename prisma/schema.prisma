@@ -71,6 +71,7 @@ model Member {
   auditTrails           AuditTrail[]
   fixedAccounts         FixedAccount[]
   loanGuarantors        LoanGuarantor[]
+  expenses              Expense[]
 
   @@map("members")
 }
@@ -197,11 +198,13 @@ model Expense {
   expenseDate   DateTime @map("expense_date")
   paymentMethod String?  @default("Cash") @map("payment_method")
   referenceNo   String?  @map("reference_no")
+  memberId      Int?     @map("member_id")
   recordedBy    Int?     @map("recorded_by")
   createdAt     DateTime @default(now()) @map("created_at")
   modifiedAt    DateTime @default(now()) @map("modified_at")
 
-  recorder User? @relation(fields: [recordedBy], references: [id], onDelete: SetNull)
+  member  Member? @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  recorder User?  @relation(fields: [recordedBy], references: [id], onDelete: SetNull)
 
   @@map("expenses")
 }

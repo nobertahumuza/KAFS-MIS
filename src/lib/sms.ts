@@ -196,3 +196,12 @@ export async function smsFixedDeposit(memberId: number, amount: number, period: 
     time: now(),
   }, "Fixed Deposit")
 }
+
+export async function smsExpense(memberId: number, category: string, description: string, amount: number) {
+  await sendToMember("expense_recorded", memberId, {
+    category,
+    description,
+    amount: amount.toLocaleString(),
+    time: now(),
+  }, "Expense")
+}

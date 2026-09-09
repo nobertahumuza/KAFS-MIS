@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { notifyExpenseRecorded } from "@/lib/notify"
+import { smsExpense } from "@/lib/sms"
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,6 +17,8 @@ export async function GET(request: NextRequest) {
       where.OR = [
         { description: { contains: search } },
         { category: { contains: search } },
+        { member: { farmerName: { contains: search } } },
+        { member: { memberCode: { contains: search } } },
       ]
     }
     if (category) {
@@ -33,7 +36,10 @@ export async function GET(request: NextRequest) {
 
     const expenses = await prisma.expense.findMany({
       where,
-      include: { recorder: { select: { id: true, fullName: true } } },
+      include: {
+        recorder: { select: { id: true, fullName: true } },
+        member: { select: { id: true, farmerName: true, memberCode: true } },
+      },
       orderBy: { expenseDate: "desc" },
     })
 
@@ -54,6 +60,13 @@ export async function GET(request: NextRequest) {
       where: { expenseDate: { gte: weekStart } },
     })
 
+    const categorySummary = await prisma.expense.groupBy({
+      by: ["category"],
+      _sum: { amount: true },
+      _count: { id: true },
+      orderBy: { _sum: { amount: "desc" } },
+    })
+
     return NextResponse.json({
       expenses,
       summary: {
@@ -61,6 +74,11 @@ export async function GET(request: NextRequest) {
         thisMonth: thisMonthAgg._sum.amount || 0,
         thisWeek: thisWeekAgg._sum.amount || 0,
       },
+      categorySummary: categorySummary.map((c) => ({
+        category: c.category,
+        totalAmount: c._sum.amount || 0,
+        count: c._count.id,
+      })),
     })
   } catch (error) {
     console.error("GET /api/expenses error:", error)
@@ -71,7 +89,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { category, description, amount, expenseDate, paymentMethod } = body
+    const { category, description, amount, expenseDate, paymentMethod, memberId } = body
 
     if (!category?.trim()) {
       return NextResponse.json({ error: "Category is required" }, { status: 400 })
@@ -90,10 +108,15 @@ export async function POST(request: NextRequest) {
         amount: Number(amount),
         expenseDate: expenseDate ? new Date(expenseDate) : new Date(),
         paymentMethod: paymentMethod || "Cash",
+        memberId: memberId ? Number(memberId) : null,
       },
     })
 
     notifyExpenseRecorded(description.trim(), Number(amount), category.trim())
+
+    if (memberId) {
+      smsExpense(Number(memberId), category.trim(), description.trim(), Number(amount))
+    }
 
     return NextResponse.json({ message: "Expense recorded successfully", expense }, { status: 201 })
   } catch (error) {

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Search, Plus, Receipt, Calendar, TrendingDown, Filter, X } from "lucide-react"
+import { Search, Plus, Receipt, Calendar, TrendingDown, Filter, X, PieChart, Wallet } from "lucide-react"
 import PageHeader from "@/components/ui/PageHeader"
 import Table from "@/components/ui/Table"
 import Badge from "@/components/ui/Badge"
@@ -12,6 +12,13 @@ import Modal from "@/components/ui/Modal"
 import { MetricCard } from "@/components/ui/Card"
 import { formatUGX, formatDate } from "@/lib/utils"
 
+interface MemberOption {
+  id: number
+  memberCode: string
+  farmerName: string
+  phoneNumber: string | null
+}
+
 interface ExpenseRecord {
   id: number
   category: string
@@ -21,6 +28,7 @@ interface ExpenseRecord {
   paymentMethod: string | null
   referenceNo: string | null
   recorder: { id: number; fullName: string } | null
+  member: { id: number; farmerName: string; memberCode: string } | null
 }
 
 interface Summary {
@@ -29,12 +37,19 @@ interface Summary {
   thisWeek: number
 }
 
+interface CategorySummary {
+  category: string
+  totalAmount: number
+  count: number
+}
+
 interface FormData {
   category: string
   description: string
   amount: string
   expenseDate: string
   paymentMethod: string
+  memberId: string
 }
 
 const initialForm: FormData = {
@@ -43,6 +58,7 @@ const initialForm: FormData = {
   amount: "",
   expenseDate: new Date().toISOString().split("T")[0],
   paymentMethod: "Cash",
+  memberId: "",
 }
 
 const EXPENSE_CATEGORIES = [
@@ -55,12 +71,16 @@ const EXPENSE_CATEGORIES = [
   "Marketing",
   "Legal & Professional",
   "Maintenance",
+  "Loan Loss Provision",
+  "Interest Expense",
+  "Dividend Payment",
   "Other",
 ]
 
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([])
   const [summary, setSummary] = useState<Summary>({ totalExpenses: 0, thisMonth: 0, thisWeek: 0 })
+  const [categorySummary, setCategorySummary] = useState<CategorySummary[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("")
@@ -72,6 +92,10 @@ export default function ExpensesPage() {
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof FormData, string>>>({})
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState("")
+
+  const [memberSearch, setMemberSearch] = useState("")
+  const [memberOptions, setMemberOptions] = useState<MemberOption[]>([])
+  const [memberDropdownOpen, setMemberDropdownOpen] = useState(false)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -86,6 +110,7 @@ export default function ExpensesPage() {
         const data = await res.json()
         setExpenses(data.expenses || [])
         setSummary(data.summary || { totalExpenses: 0, thisMonth: 0, thisWeek: 0 })
+        setCategorySummary(data.categorySummary || [])
       }
     } catch (err) {
       console.error("Failed to fetch expenses:", err)
@@ -95,6 +120,22 @@ export default function ExpensesPage() {
   }, [search, categoryFilter, dateFrom, dateTo])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  const searchMembers = useCallback(async (query: string) => {
+    if (query.length < 1) { setMemberOptions([]); return }
+    try {
+      const res = await fetch(`/api/members/search?q=${encodeURIComponent(query)}`)
+      if (res.ok) {
+        const data = await res.json()
+        setMemberOptions(data.data || [])
+      }
+    } catch { /* empty */ }
+  }, [])
+
+  useEffect(() => {
+    const timer = setTimeout(() => searchMembers(memberSearch), 300)
+    return () => clearTimeout(timer)
+  }, [memberSearch, searchMembers])
 
   const validateForm = (): boolean => {
     const errors: Partial<Record<keyof FormData, string>> = {}
@@ -121,6 +162,7 @@ export default function ExpensesPage() {
           amount: parseFloat(form.amount),
           expenseDate: form.expenseDate,
           paymentMethod: form.paymentMethod,
+          memberId: form.memberId ? parseInt(form.memberId) : null,
         }),
       })
       if (!res.ok) {
@@ -129,6 +171,7 @@ export default function ExpensesPage() {
       }
       setModalOpen(false)
       setForm(initialForm)
+      setMemberSearch("")
       fetchData()
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "An unexpected error occurred")
@@ -136,6 +179,8 @@ export default function ExpensesPage() {
       setSubmitting(false)
     }
   }
+
+  const totalSavingsImpact = summary.totalExpenses
 
   const columns = [
     {
@@ -158,6 +203,21 @@ export default function ExpensesPage() {
       render: (item: Record<string, unknown>) => (
         <span className="text-sm text-gray-900 dark:text-white">{item.description as string}</span>
       ),
+    },
+    {
+      key: "member",
+      header: "Member",
+      render: (item: Record<string, unknown>) => {
+        const m = item.member as { farmerName: string; memberCode: string } | null
+        return m ? (
+          <div>
+            <p className="text-sm font-medium">{m.farmerName}</p>
+            <p className="text-xs text-gray-500">{m.memberCode}</p>
+          </div>
+        ) : (
+          <span className="text-sm text-gray-400">—</span>
+        )
+      },
     },
     {
       key: "amount",
@@ -187,8 +247,8 @@ export default function ExpensesPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Expenses"
-        subtitle="Track and manage SACCO expenses"
+        title="Expenses & Spending"
+        subtitle="Track expenses, spending patterns, and savings impact"
         actions={
           <Button icon={<Plus className="w-4 h-4" />} onClick={() => setModalOpen(true)}>
             Record Expense
@@ -201,6 +261,26 @@ export default function ExpensesPage() {
         <MetricCard label="This Month" value={formatUGX(summary.thisMonth)} icon={<Calendar className="w-5 h-5" />} />
         <MetricCard label="This Week" value={formatUGX(summary.thisWeek)} icon={<Receipt className="w-5 h-5" />} />
       </div>
+
+      {categorySummary.length > 0 && (
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm p-4">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+            <PieChart className="w-4 h-4" />
+            Spending by Category
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {categorySummary.map((cat) => (
+              <div key={cat.category} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
+                <div>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">{cat.category}</p>
+                  <p className="text-xs text-gray-500">{cat.count} transaction{cat.count !== 1 ? "s" : ""}</p>
+                </div>
+                <span className="text-sm font-bold text-red-600 dark:text-red-400">{formatUGX(cat.totalAmount)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
         <div className="p-4 border-b border-gray-200 dark:border-gray-800 space-y-3">
@@ -241,7 +321,7 @@ export default function ExpensesPage() {
         <Table columns={columns} data={expenses as unknown as Record<string, unknown>[]} emptyMessage="No expenses found" />
       </div>
 
-      <Modal open={modalOpen} onClose={() => { setModalOpen(false); setForm(initialForm); setSubmitError("") }} title="Record Expense" size="md">
+      <Modal open={modalOpen} onClose={() => { setModalOpen(false); setForm(initialForm); setSubmitError(""); setMemberSearch("") }} title="Record Expense" size="md">
         <form onSubmit={handleSubmit} className="space-y-4">
           {submitError && (
             <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
@@ -280,6 +360,50 @@ export default function ExpensesPage() {
             min="1"
           />
 
+          <div className="relative">
+            <Input
+              label="Member (Optional - for SMS notification)"
+              value={form.memberId ? memberSearch : memberSearch}
+              onChange={(e) => {
+                setMemberSearch(e.target.value)
+                setForm((p) => ({ ...p, memberId: "" }))
+                setMemberDropdownOpen(true)
+              }}
+              onFocus={() => setMemberDropdownOpen(true)}
+              placeholder="Search member to notify via SMS..."
+            />
+            {memberDropdownOpen && memberOptions.length > 0 && (
+              <div className="absolute z-[100] w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                {memberOptions.map((member) => (
+                  <button
+                    key={member.id}
+                    type="button"
+                    onClick={() => {
+                      setForm((p) => ({ ...p, memberId: String(member.id) }))
+                      setMemberSearch(`${member.memberCode} - ${member.farmerName}`)
+                      setMemberDropdownOpen(false)
+                      setMemberOptions([])
+                    }}
+                    className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-100 dark:border-gray-700 last:border-0"
+                  >
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{member.farmerName}</p>
+                    <p className="text-xs text-gray-500">{member.memberCode} • {member.phoneNumber || "No phone"}</p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {form.memberId && (
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+              <Wallet className="w-4 h-4 text-green-600" />
+              <p className="text-sm text-green-700 dark:text-green-400">Member linked — SMS will be sent automatically</p>
+              <button type="button" onClick={() => { setForm((p) => ({ ...p, memberId: "" })); setMemberSearch("") }} className="ml-auto">
+                <X className="w-4 h-4 text-green-600 hover:text-green-800" />
+              </button>
+            </div>
+          )}
+
           <Input
             label="Date"
             type="date"
@@ -300,7 +424,7 @@ export default function ExpensesPage() {
           />
 
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <Button type="button" variant="ghost" onClick={() => { setModalOpen(false); setForm(initialForm) }}>Cancel</Button>
+            <Button type="button" variant="ghost" onClick={() => { setModalOpen(false); setForm(initialForm); setMemberSearch("") }}>Cancel</Button>
             <Button type="submit" loading={submitting}>Record Expense</Button>
           </div>
         </form>
