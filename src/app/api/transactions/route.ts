@@ -33,7 +33,7 @@ export async function GET(request: Request) {
       where,
       include: {
         member: { select: { farmerName: true, memberCode: true } },
-        recordedByUser: { select: { fullName: true } },
+        recorder: { select: { fullName: true } },
       },
       orderBy: { transactionDate: "desc" },
       take: 200,
@@ -47,7 +47,7 @@ export async function GET(request: Request) {
             member: { select: { farmerName: true, memberCode: true } },
           },
         },
-        recordedByUser: { select: { fullName: true } },
+        recorder: { select: { fullName: true } },
       },
       orderBy: { createdAt: "desc" },
       take: 200,
@@ -56,7 +56,7 @@ export async function GET(request: Request) {
     const expenses = await prisma.expense.findMany({
       where: type ? { category: type } : {},
       include: {
-        recordedByUser: { select: { fullName: true } },
+        recorder: { select: { fullName: true } },
       },
       orderBy: { expenseDate: "desc" },
       take: 200,
@@ -72,7 +72,7 @@ export async function GET(request: Request) {
         description: s.narration || s.transactionType,
         amount: s.amount,
         reference: s.referenceNumber || "-",
-        recordedBy: s.recordedByUser?.fullName || "System",
+        recordedBy: s.recorder?.fullName || "System",
       })),
       ...loanRepayments.map((r) => ({
         id: r.id + 100000,
@@ -83,7 +83,7 @@ export async function GET(request: Request) {
         description: `Repayment for ${r.loan.loanCode}`,
         amount: r.amountPaid,
         reference: r.referenceNumber || "-",
-        recordedBy: r.recordedByUser?.fullName || "System",
+        recordedBy: r.recorder?.fullName || "System",
       })),
       ...expenses.map((e) => ({
         id: e.id + 200000,
@@ -94,7 +94,7 @@ export async function GET(request: Request) {
         description: `${e.category}: ${e.description}`,
         amount: e.amount,
         reference: e.referenceNo || "-",
-        recordedBy: e.recordedByUser?.fullName || "System",
+        recordedBy: e.recorder?.fullName || "System",
       })),
     ]
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
