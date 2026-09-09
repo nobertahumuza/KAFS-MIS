@@ -76,7 +76,7 @@ export async function GET() {
       totalFixedDeposits: totalFixedDeposits._sum.principalAmount || 0,
       totalLoanPortfolio: totalLoans._sum.principalAmount || 0,
       outstandingBalance: activeLoans._sum.currentBalance || 0,
-      totalShares: totalShares._sum.amount || 0,
+      totalShares: totalShares._sum.totalAmount || 0,
       totalExpensesThisMonth: totalExpensesThisMonth._sum.amount || 0,
       income,
       expenses,
