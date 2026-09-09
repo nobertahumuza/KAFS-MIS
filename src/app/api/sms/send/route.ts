@@ -1,47 +1,44 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 
-interface EgoSMSResponse {
-  status?: number
-  message?: string
-  data?: { id?: string }
-}
-
 async function sendEgoSMS(
   phone: string,
   message: string,
   settings: Record<string, string>
 ): Promise<{ success: boolean; providerMsgId?: string; error?: string }> {
-  const apiKey = settings.api_key
-  const apiSecret = settings.api_secret
-  const senderId = settings.sender_id || "KAFSSACCO"
-  const baseUrl = settings.base_url || "https://app.egosms.co/api/v1"
+  const username = settings.api_username
+  const password = settings.api_password
+  const senderId = settings.sender_id || "KAFS"
+  const apiUrl = settings.api_url || "https://comms.egosms.co/api/v1/plain/"
 
-  if (!apiKey || !apiSecret) {
-    return { success: false, error: "EgoSMS API credentials not configured" }
+  if (!username || !password) {
+    return { success: false, error: "EgoSMS credentials not configured" }
   }
 
+  const formattedPhone = phone.startsWith("+") ? phone.substring(1) : phone.startsWith("256") ? phone : "256" + phone.replace(/^0/, "")
+
   try {
-    const response = await fetch(`${baseUrl}/sms/send`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Basic ${Buffer.from(`${apiKey}:${apiSecret}`).toString("base64")}`,
-      },
-      body: JSON.stringify({
-        sender_id: senderId,
-        phone_number: phone.replace(/^0/, "256"),
-        message,
-      }),
+    const params = new URLSearchParams({
+      username,
+      password,
+      sender_id: senderId,
+      phone_number: formattedPhone,
+      message,
     })
 
-    const result: EgoSMSResponse = await response.json()
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+    })
 
-    if (response.ok && result.status === 200) {
-      return { success: true, providerMsgId: result.data?.id }
+    const result = await response.text()
+
+    if (response.ok) {
+      return { success: true, providerMsgId: result }
     }
 
-    return { success: false, error: result.message || "EgoSMS API error" }
+    return { success: false, error: result || "EgoSMS API error" }
   } catch (err) {
     return { success: false, error: `Network error: ${err instanceof Error ? err.message : "Unknown"}` }
   }
@@ -52,15 +49,14 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { logIds, memberId, phoneNumber, message, messageType = "General" } = body
 
-    // Bulk send
+    const settingsRows = await prisma.smsSetting.findMany()
+    const settings: Record<string, string> = {}
+    settingsRows.forEach((s) => { settings[s.settingKey] = s.settingValue || "" })
+
     if (Array.isArray(logIds) && logIds.length > 0) {
       const logs = await prisma.smsLog.findMany({
         where: { id: { in: logIds.map((id: string | number) => Number(id)) }, status: "Pending" },
       })
-
-      const settingsRows = await prisma.smsSetting.findMany()
-      const settings: Record<string, string> = {}
-      settingsRows.forEach((s) => { settings[s.settingKey] = s.settingValue || "" })
 
       let sent = 0
       let failed = 0
@@ -70,11 +66,7 @@ export async function POST(request: NextRequest) {
         if (result.success) {
           await prisma.smsLog.update({
             where: { id: log.id },
-            data: {
-              status: "Sent",
-              providerMsgId: result.providerMsgId || null,
-              sentAt: new Date(),
-            },
+            data: { status: "Sent", providerMsgId: result.providerMsgId || null, sentAt: new Date() },
           })
           sent++
         } else {
@@ -89,7 +81,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: `Sent: ${sent}, Failed: ${failed}`, sent, failed })
     }
 
-    // Single send
     if (!phoneNumber?.trim()) {
       return NextResponse.json({ error: "Phone number is required" }, { status: 400 })
     }
@@ -99,7 +90,7 @@ export async function POST(request: NextRequest) {
 
     const log = await prisma.smsLog.create({
       data: {
-        memberId: memberId ? parseInt(memberId) : null,
+        memberId: memberId ? Number(memberId) : null,
         phoneNumber: phoneNumber.trim(),
         message: message.trim(),
         messageType,
@@ -107,22 +98,14 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    const settingsRows = await prisma.smsSetting.findMany()
-    const settings: Record<string, string> = {}
-    settingsRows.forEach((s) => { settings[s.settingKey] = s.settingValue || "" })
-
     const result = await sendEgoSMS(phoneNumber.trim(), message.trim(), settings)
 
     if (result.success) {
       await prisma.smsLog.update({
         where: { id: log.id },
-        data: {
-          status: "Sent",
-          providerMsgId: result.providerMsgId || null,
-          sentAt: new Date(),
-        },
+        data: { status: "Sent", providerMsgId: result.providerMsgId || null, sentAt: new Date() },
       })
-      return NextResponse.json({ data: { ...log, status: "Sent" }, message: "SMS sent" }, { status: 201 })
+      return NextResponse.json({ data: { ...log, status: "Sent" }, message: "SMS sent successfully" }, { status: 201 })
     }
 
     await prisma.smsLog.update({
