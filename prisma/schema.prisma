@@ -1,0 +1,700 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  fullName  String   @map("full_name")
+  username  String   @unique
+  password  String
+  role      String   @default("Teller")
+  status    String   @default("Active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  accountOpeningLogs   AccountOpeningLog[]
+  auditTrails          AuditTrail[]
+  customersCreated     Customer[]           @relation("CustomerCreator")
+  customersModified    Customer[]           @relation("CustomerModifier")
+  expensesRecorded     Expense[]
+  loansRecorded        Loan[]
+  loanAppsCreated      LoanApplication[]    @relation("LoanAppCreator")
+  loanAppsModified     LoanApplication[]    @relation("LoanAppModifier")
+  loanAppraisals       LoanAppraisal[]
+  loanAuditLogs        LoanAuditLog[]
+  loanBoardDecisions   LoanBoardDecision[]
+  loanCommitteeDecisions LoanCommitteeDecision[]
+  loanDisbursements    LoanDisbursement[]
+  loanDocuments        LoanDocument[]
+  loanRepayments       LoanRepayment[]
+  savingsEntries       SavingsLedger[]
+  smsSent              SmsLog[]
+
+  @@map("users")
+}
+
+model Member {
+  id               Int      @id @default(autoincrement())
+  memberCode       String   @unique @map("member_code")
+  farmerName       String   @map("farmer_name")
+  gender           String?  @default("Male")
+  phoneNumber      String?  @map("phone_number")
+  email            String?
+  village          String?
+  parish           String?
+  district         String?
+  subCounty        String?  @map("sub_county")
+  occupation       String?
+  nextOfKinName    String?  @map("next_of_kin_name")
+  nextOfKinPhone   String?  @map("next_of_kin_phone")
+  idDocumentType   String?  @map("id_document_type")
+  idDocumentNumber String?  @map("id_document_number")
+  address          String?
+  ninNumber        String?  @map("nin_number")
+  mainProduce      String?  @default("Coffee") @map("main_produce")
+  totalShares      Int?     @default(0) @map("total_shares")
+  shareValue       Float?   @default(0) @map("share_value")
+  registrationDate DateTime @map("registration_date")
+  status           String?  @default("Active")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  accounts              Customer[]
+  loanApplications      LoanApplication[]
+  loans                 Loan[]
+  savingsLedger         SavingsLedger[]
+  sharesLedger          SharesLedger[]
+  smsLogs               SmsLog[]
+  auditTrails           AuditTrail[]
+  fixedAccounts         FixedAccount[]
+  loanGuarantors        LoanGuarantor[]
+
+  @@map("members")
+}
+
+model AccountType {
+  id                  Int    @id @default(autoincrement())
+  typeName            String @unique @map("type_name")
+  requiresOtherText   Boolean @default(false) @map("requires_other_text")
+  status              String @default("Active")
+
+  @@map("account_types")
+}
+
+model AppSetting {
+  id           Int      @id @default(autoincrement())
+  settingKey   String   @unique @map("setting_key")
+  settingValue String?  @map("setting_value")
+  updatedAt    DateTime @default(now()) @map("updated_at")
+
+  @@map("app_settings")
+}
+
+model AccountOpeningLog {
+  id          Int      @id @default(autoincrement())
+  customerId  Int      @map("customer_id")
+  action      String
+  performedBy Int?     @map("performed_by")
+  notes       String?
+  performedAt DateTime @default(now()) @map("performed_at")
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  performer User?   @relation(fields: [performedBy], references: [id], onDelete: SetNull)
+
+  @@map("account_opening_log")
+}
+
+model AuditTrail {
+  id             Int      @id @default(autoincrement())
+  userId         Int?     @map("user_id")
+  actionType     String   @map("action_type")
+  tableName      String?  @map("table_name")
+  recordId       Int?     @map("record_id")
+  description    String?
+  amount         Float?
+  memberId       Int?     @map("member_id")
+  accountNumber  String?  @map("account_number")
+  referenceNumber String? @map("reference_number")
+  ipAddress      String?  @map("ip_address")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  member Member? @relation(fields: [memberId], references: [id], onDelete: SetNull)
+
+  @@map("audit_trail")
+}
+
+model ChartOfAccount {
+  id          Int      @id @default(autoincrement())
+  accountCode String   @unique @map("account_code")
+  accountName String   @map("account_name")
+  accountType String   @map("account_type")
+  balance     Float    @default(0)
+  status      String   @default("Active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  journalLines JournalLine[]
+
+  @@map("chart_of_accounts")
+}
+
+model Customer {
+  id                    Int      @id @default(autoincrement())
+  memberId              Int?     @map("member_id")
+  accountNo             String   @unique @map("account_no")
+  applicationType       String   @default("Single") @map("application_type")
+  accountType           String   @default("Savings Account") @map("account_type")
+  accountTypeOther      String?  @map("account_type_other")
+  currency              String   @default("UGX")
+  currencyOther         String?  @map("currency_other")
+  fullName              String   @map("full_name")
+  gender                String   @default("Male")
+  maritalStatus         String?  @default("Single") @map("marital_status")
+  dateOfBirth           DateTime? @map("date_of_birth")
+  placeOfBirth          String?  @map("place_of_birth")
+  district              String?
+  county                String?
+  subCounty             String?  @map("sub_county")
+  nationality           String?  @default("Ugandan")
+  phoneNumber           String?  @map("phone_number")
+  emailAddress          String?  @map("email_address")
+  residentialAddress    String?  @map("residential_address")
+  occupation            String?
+  employerBusiness      String?  @map("employer_business")
+  ninNumber             String?  @map("nin_number")
+  sourceOfFunds         String?  @map("source_of_funds")
+  purposeOfAccount      String?  @map("purpose_of_account")
+  nextOfKinName         String?  @map("next_of_kin_name")
+  beneficiary           String?
+  nextOfKinContact      String?  @map("next_of_kin_contact")
+  idDocumentType        String?  @map("id_document_type")
+  idDocumentNumber      String?  @map("id_document_number")
+  passportPhoto         String?  @map("passport_photo")
+  signaturePath         String?  @map("signature_path")
+  status                String   @default("Draft")
+  createdBy             Int?     @map("created_by")
+  createdAt             DateTime @default(now()) @map("created_at")
+  modifiedBy            Int?     @map("modified_by")
+  modifiedAt            DateTime @default(now()) @map("modified_at")
+
+  member               Member?            @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  creator              User?              @relation("CustomerCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  modifier             User?              @relation("CustomerModifier", fields: [modifiedBy], references: [id], onDelete: SetNull)
+  accountOpeningLogs   AccountOpeningLog[]
+  loanApplications     LoanApplication[]
+
+  @@map("customers")
+}
+
+model Expense {
+  id            Int      @id @default(autoincrement())
+  category      String
+  description   String
+  amount        Float
+  expenseDate   DateTime @map("expense_date")
+  paymentMethod String?  @default("Cash") @map("payment_method")
+  referenceNo   String?  @map("reference_no")
+  recordedBy    Int?     @map("recorded_by")
+  createdAt     DateTime @default(now()) @map("created_at")
+  modifiedAt    DateTime @default(now()) @map("modified_at")
+
+  recorder User? @relation(fields: [recordedBy], references: [id], onDelete: SetNull)
+
+  @@map("expenses")
+}
+
+model FixedAccount {
+  id               Int      @id @default(autoincrement())
+  fixedCode        String   @unique @map("fixed_code")
+  memberId         Int      @map("member_id")
+  accountNumber    String   @map("account_number")
+  principalAmount  Float    @map("principal_amount")
+  startDate        DateTime @map("start_date")
+  fixedPeriod      Int      @map("fixed_period")
+  maturityDate     DateTime @map("maturity_date")
+  interestRate     Float    @map("interest_rate")
+  interestEarned   Float    @default(0) @map("interest_earned")
+  maturityAmount   Float    @default(0) @map("maturity_amount")
+  status           String   @default("Active")
+  referenceNumber  String?  @map("reference_number")
+  createdBy        Int?     @map("created_by")
+  withdrawnBy      Int?     @map("withdrawn_by")
+  withdrawnAt      DateTime? @map("withdrawn_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@map("fixed_accounts")
+}
+
+model JournalEntry {
+  id              Int      @id @default(autoincrement())
+  entryCode       String   @unique @map("entry_code")
+  entryDate       DateTime @map("entry_date")
+  description     String
+  referenceNumber String?  @map("reference_number")
+  totalDebit      Float    @map("total_debit")
+  totalCredit     Float    @map("total_credit")
+  status          String?  @default("Posted")
+  createdBy       Int?     @map("created_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  lines JournalLine[]
+
+  @@map("journal_entries")
+}
+
+model JournalLine {
+  id         Int     @id @default(autoincrement())
+  entryId    Int     @map("entry_id")
+  accountId  Int     @map("account_id")
+  debit      Float   @default(0)
+  credit     Float   @default(0)
+  memberId   Int?    @map("member_id")
+  narration  String? @map("narration")
+
+  entry JournalEntry    @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  account ChartOfAccount @relation(fields: [accountId], references: [id])
+
+  @@map("journal_lines")
+}
+
+model Loan {
+  id                 Int      @id @default(autoincrement())
+  loanCode           String   @unique @map("loan_code")
+  memberId           Int      @map("member_id")
+  principalAmount    Float    @map("principal_amount")
+  interestRate       Float    @default(10) @map("interest_rate")
+  currentBalance     Float    @map("current_balance")
+  loanPurpose        String?  @map("loan_purpose")
+  loanStatus         String?  @default("Active") @map("loan_status")
+  disbursementDate   DateTime @map("disbursement_date")
+  dueDate            DateTime? @map("due_date")
+  recordedBy         Int?     @map("recorded_by")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  member            Member              @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  recorder          User?               @relation(fields: [recordedBy], references: [id], onDelete: SetNull)
+  agreements        LoanAgreement[]
+  disbursements     LoanDisbursement[]
+  fines             LoanFine[]
+  repaymentSchedules LoanRepaymentSchedule[]
+  repayments        LoanRepayment[]
+
+  @@map("loans")
+}
+
+model LoanApplication {
+  id                  Int      @id @default(autoincrement())
+  applicationCode     String   @unique @map("application_code")
+  memberId            Int      @map("member_id")
+  customerId          Int?     @map("customer_id")
+  loanAmount          Float    @map("loan_amount")
+  loanAmountWords     String?  @map("loan_amount_words")
+  loanPurpose         String?  @map("loan_purpose")
+  loanDuration        Int?     @map("loan_duration")
+  loanPeriodMonths    Int?     @map("loan_period_months")
+  repaymentMode       String?  @default("Monthly") @map("repayment_mode")
+  interestRate        Float?   @default(10) @map("interest_rate")
+  monthlyInstallment  Float?   @default(0) @map("monthly_installment")
+  status              String   @default("Draft")
+  submittedAt         DateTime? @map("submitted_at")
+  disbursedAt         DateTime? @map("disbursed_at")
+  disbursementDate    DateTime? @map("disbursement_date")
+  dueDate             DateTime? @map("due_date")
+  createdBy           Int?     @map("created_by")
+  createdAt           DateTime @default(now()) @map("created_at")
+  modifiedBy          Int?     @map("modified_by")
+  modifiedAt          DateTime @default(now()) @map("modified_at")
+
+  member              Member                @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  customer            Customer?             @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  creator             User?                 @relation("LoanAppCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  modifier            User?                 @relation("LoanAppModifier", fields: [modifiedBy], references: [id], onDelete: SetNull)
+  agreement           LoanAgreement?
+  appraisal           LoanAppraisal?
+  auditLogs           LoanAuditLog[]
+  boardDecision       LoanBoardDecision?
+  committeeDecision   LoanCommitteeDecision?
+  consents            LoanConsent[]
+  disbursements       LoanDisbursement[]
+  documents           LoanDocument[]
+  guarantors          LoanGuarantor[]
+  repaymentSchedules  LoanRepaymentSchedule[]
+  securities          LoanSecurity[]
+  spouseConsent       LoanSpouseConsent?
+
+  @@map("loan_applications")
+}
+
+model LoanAgreement {
+  id                   Int      @id @default(autoincrement())
+  applicationId        Int      @unique @map("application_id")
+  loanId               Int?     @map("loan_id")
+  borrowerName         String?  @map("borrower_name")
+  principalAmount      Float    @default(0) @map("principal_amount")
+  amountWords          String?  @map("amount_words")
+  loanPeriod           String?  @map("loan_period")
+  interestRate         Float    @default(0) @map("interest_rate")
+  monthlyInstallment   Float    @default(0) @map("monthly_installment")
+  penaltyRate          Float    @default(0) @map("penalty_rate")
+  securityPledged      String?  @map("security_pledged")
+  guarantorsText       String?  @map("guarantors_text")
+  borrowerSignature    String?  @map("borrower_signature")
+  spouseSignature      String?  @map("spouse_signature")
+  witnessSignature     String?  @map("witness_signature")
+  officialSignature    String?  @map("official_signature")
+  agreementDate        DateTime? @map("agreement_date")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  application LoanApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  loan        Loan?           @relation(fields: [loanId], references: [id], onDelete: SetNull)
+
+  @@map("loan_agreements")
+}
+
+model LoanAppraisal {
+  id              Int      @id @default(autoincrement())
+  applicationId   Int      @unique @map("application_id")
+  appraisalNotes  String?  @map("appraisal_notes")
+  recommendation  String?
+  comments        String?
+  officerName     String?  @map("officer_name")
+  officerId       Int?     @map("officer_id")
+  signaturePath   String?  @map("signature_path")
+  appraisalDate   DateTime? @map("appraisal_date")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  application LoanApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  officer     User?           @relation(fields: [officerId], references: [id], onDelete: SetNull)
+
+  @@map("loan_appraisals")
+}
+
+model LoanAuditLog {
+  id            Int      @id @default(autoincrement())
+  applicationId Int      @map("application_id")
+  action        String
+  performedBy   Int?     @map("performed_by")
+  details       String?
+  performedAt   DateTime @default(now()) @map("performed_at")
+
+  application LoanApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  performer   User?           @relation(fields: [performedBy], references: [id], onDelete: SetNull)
+
+  @@map("loan_audit_log")
+}
+
+model LoanBoardDecision {
+  id               Int      @id @default(autoincrement())
+  applicationId    Int      @unique @map("application_id")
+  decision         String?
+  approvedAmount   Float    @default(0) @map("approved_amount")
+  chairpersonName  String?  @map("chairperson_name")
+  chairpersonId    Int?     @map("chairperson_id")
+  signaturePath    String?  @map("signature_path")
+  decisionDate     DateTime? @map("decision_date")
+  comments         String?
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  application  LoanApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  chairperson  User?           @relation(fields: [chairpersonId], references: [id], onDelete: SetNull)
+
+  @@map("loan_board_decisions")
+}
+
+model LoanCommitteeDecision {
+  id               Int      @id @default(autoincrement())
+  applicationId    Int      @unique @map("application_id")
+  decision         String?
+  approvedAmount   Float    @default(0) @map("approved_amount")
+  chairpersonName  String?  @map("chairperson_name")
+  chairpersonId    Int?     @map("chairperson_id")
+  signaturePath    String?  @map("signature_path")
+  decisionDate     DateTime? @map("decision_date")
+  comments         String?
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  application  LoanApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  chairperson  User?           @relation(fields: [chairpersonId], references: [id], onDelete: SetNull)
+
+  @@map("loan_committee_decisions")
+}
+
+model LoanConsent {
+  id            Int      @id @default(autoincrement())
+  applicationId Int      @map("application_id")
+  consentRole   String   @map("consent_role")
+  personName    String?  @map("person_name")
+  telephone     String?
+  signaturePath String?  @map("signature_path")
+  consentDate   DateTime? @map("consent_date")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  application LoanApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@map("loan_consents")
+}
+
+model LoanDisbursement {
+  id                  Int      @id @default(autoincrement())
+  applicationId       Int      @map("application_id")
+  loanId              Int?     @map("loan_id")
+  amountDisbursed     Float    @map("amount_disbursed")
+  disbursementDate    DateTime @map("disbursement_date")
+  disbursementMethod  String?  @default("Cash") @map("disbursement_method")
+  referenceNumber     String?  @map("reference_number")
+  disbursedBy         Int?     @map("disbursed_by")
+  notes               String?
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  application LoanApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  loan        Loan?           @relation(fields: [loanId], references: [id], onDelete: SetNull)
+  disbursor   User?           @relation(fields: [disbursedBy], references: [id], onDelete: SetNull)
+
+  @@map("loan_disbursements")
+}
+
+model LoanDocument {
+  id            Int      @id @default(autoincrement())
+  applicationId Int      @map("application_id")
+  documentType  String?  @map("document_type")
+  documentName  String   @map("document_name")
+  filePath      String   @map("file_path")
+  uploadedBy    Int?     @map("uploaded_by")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  application LoanApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  uploader    User?           @relation(fields: [uploadedBy], references: [id], onDelete: SetNull)
+
+  @@map("loan_documents")
+}
+
+model LoanFine {
+  id          Int      @id @default(autoincrement())
+  loanId      Int      @map("loan_id")
+  scheduleId  Int      @unique @map("schedule_id")
+  fineAmount  Float    @map("fine_amount")
+  fineRate    Float?   @default(5) @map("fine_rate")
+  reason      String?  @default("Late payment fine")
+  status      String   @default("Pending")
+  paidAmount  Float?   @default(0) @map("paid_amount")
+  paidDate    DateTime? @map("paid_date")
+  waivedBy    Int?     @map("waived_by")
+  createdBy   Int?     @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  loan     Loan                 @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  schedule LoanRepaymentSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  @@map("loan_fines")
+}
+
+model LoanGuarantor {
+  id               Int      @id @default(autoincrement())
+  applicationId    Int      @map("application_id")
+  guarantorOrder   Int      @default(1) @map("guarantor_order")
+  fullName         String   @map("full_name")
+  accountNumber    String?  @map("account_number")
+  telephone        String?
+  memberId         Int?     @map("member_id")
+  signaturePath    String?  @map("signature_path")
+  consentText      String?  @map("consent_text")
+  consentDate      DateTime? @map("consent_date")
+  guaranteeStatus  String?  @default("Active") @map("guarantee_status")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  application LoanApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  member      Member?         @relation(fields: [memberId], references: [id], onDelete: SetNull)
+
+  @@map("loan_guarantors")
+}
+
+model LoanRepaymentSchedule {
+  id              Int      @id @default(autoincrement())
+  applicationId   Int      @map("application_id")
+  loanId          Int?     @map("loan_id")
+  installmentNo   Int      @map("installment_no")
+  dueDate         DateTime @map("due_date")
+  principalAmount Float?   @default(0) @map("principal_amount")
+  interestAmount  Float?   @default(0) @map("interest_amount")
+  totalAmount     Float?   @default(0) @map("total_amount")
+  balance         Float?   @default(0)
+  fineAmount      Float?   @default(0) @map("fine_amount")
+  amountPaid      Float?   @default(0) @map("amount_paid")
+  status          String?  @default("Pending")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  application LoanApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  loan        Loan?           @relation(fields: [loanId], references: [id], onDelete: SetNull)
+  fine        LoanFine?
+
+  @@map("loan_repayment_schedules")
+}
+
+model LoanRepayment {
+  id              Int      @id @default(autoincrement())
+  loanId          Int      @map("loan_id")
+  amountPaid      Float    @map("amount_paid")
+  finePaid        Float?   @default(0) @map("fine_paid")
+  balanceAfter    Float    @default(0) @map("balance_after")
+  paymentDate     DateTime @map("payment_date")
+  recordedBy      Int?     @map("recorded_by")
+  referenceNumber String?  @map("reference_number")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  loan     Loan @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  recorder User? @relation(fields: [recordedBy], references: [id], onDelete: SetNull)
+
+  @@map("loan_repayments")
+}
+
+model LoanSecurity {
+  id                   Int      @id @default(autoincrement())
+  applicationId        Int      @map("application_id")
+  permanentHome        String?  @map("permanent_home")
+  village              String?
+  parish               String?
+  subCounty            String?  @map("sub_county")
+  county               String?
+  district             String?
+  residentialAddress   String?  @map("residential_address")
+  securityLocation     String?  @map("security_location")
+  securityOwnership    String?  @map("security_ownership")
+  marketPrice          Float?   @default(0) @map("market_price")
+  securityDescription  String?  @map("security_description")
+  estimatedValue       Float?   @default(0) @map("estimated_value")
+  totalSecurityValue   Float?   @default(0) @map("total_security_value")
+  lcConfirmation       String?  @map("lc_confirmation")
+  securityBoundaries   String?  @map("security_boundaries")
+  supportingDocument   String?  @map("supporting_document")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  application LoanApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@map("loan_securities")
+}
+
+model LoanSpouseConsent {
+  id              Int      @id @default(autoincrement())
+  applicationId   Int      @unique @map("application_id")
+  spouseName      String?  @map("spouse_name")
+  approvedAmount  Float?   @default(0) @map("approved_amount")
+  amountWords     String?  @map("amount_words")
+  telephone       String?
+  signaturePath   String?  @map("signature_path")
+  consentDate     DateTime? @map("consent_date")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  application LoanApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@map("loan_spouse_consents")
+}
+
+model Notification {
+  id               Int      @id @default(autoincrement())
+  notificationType String   @map("notification_type")
+  title            String
+  message          String
+  severity         String?  @default("info")
+  link             String?
+  isRead           Boolean? @default(false) @map("is_read")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@map("notifications")
+}
+
+model SavingsLedger {
+  id                Int      @id @default(autoincrement())
+  memberId          Int      @map("member_id")
+  transactionType   String   @map("transaction_type")
+  amount            Float
+  withdrawalFee     Float?   @default(0) @map("withdrawal_fee")
+  balanceAfter      Float    @default(0) @map("balance_after")
+  narration         String?
+  referenceNumber   String?  @map("reference_number")
+  recordedBy        Int?     @map("recorded_by")
+  transactionDate   DateTime @map("transaction_date")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  member   Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  recorder User?  @relation(fields: [recordedBy], references: [id], onDelete: SetNull)
+
+  @@map("savings_ledger")
+}
+
+model SavingsProduct {
+  id                   Int      @id @default(autoincrement())
+  productCode          String   @unique @map("product_code")
+  productName          String   @map("product_name")
+  interestRate         Float    @default(0) @map("interest_rate")
+  minBalance           Float    @default(0) @map("min_balance")
+  dailyWithdrawalLimit Float    @default(0) @map("daily_withdrawal_limit")
+  approvalAbove        Float?   @map("approval_above")
+  status               String   @default("Active")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  @@map("savings_products")
+}
+
+model SharesLedger {
+  id                Int      @id @default(autoincrement())
+  memberId          Int      @map("member_id")
+  transactionType   String   @default("Purchase") @map("transaction_type")
+  sharesQuantity    Int      @default(0) @map("shares_quantity")
+  sharePrice        Float    @default(0) @map("share_price")
+  totalAmount       Float    @default(0) @map("total_amount")
+  narration         String?
+  referenceNumber   String?  @map("reference_number")
+  recordedBy        Int?     @map("recorded_by")
+  transactionDate   DateTime @map("transaction_date")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@map("shares_ledger")
+}
+
+model SmsLog {
+  id                Int       @id @default(autoincrement())
+  memberId          Int?      @map("member_id")
+  phoneNumber       String    @map("phone_number")
+  message           String
+  messageType       String    @default("General") @map("message_type")
+  status            String    @default("Pending")
+  providerMsgId     String?   @map("provider_msg_id")
+  providerResponse  String?   @map("provider_response")
+  errorMessage      String?   @map("error_message")
+  sentBy            Int?      @map("sent_by")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  sentAt            DateTime? @map("sent_at")
+
+  member Member? @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  sender User?   @relation(fields: [sentBy], references: [id], onDelete: SetNull)
+
+  @@map("sms_logs")
+}
+
+model SmsSetting {
+  id           Int      @id @default(autoincrement())
+  settingKey   String   @unique @map("setting_key")
+  settingValue String?  @map("setting_value")
+  updatedAt    DateTime @default(now()) @map("updated_at")
+
+  @@map("sms_settings")
+}
+
+model SmsTemplate {
+  id          Int      @id @default(autoincrement())
+  templateName String  @map("template_name")
+  templateKey String   @unique @map("template_key")
+  messageBody String   @map("message_body")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @default(now()) @map("updated_at")
+
+  @@map("sms_templates")
+}
