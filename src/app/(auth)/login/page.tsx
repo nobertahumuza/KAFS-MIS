@@ -27,13 +27,17 @@ export default function LoginPage() {
       })
 
       if (result?.error) {
-        setError(result.error)
+        if (result.error === "Configuration") {
+          setError("Server configuration error. Please check that NEXTAUTH_SECRET and database are properly configured.")
+        } else {
+          setError("Invalid username or password.")
+        }
       } else {
         router.push("/dashboard")
         router.refresh()
       }
     } catch {
-      setError("An error occurred. Please try again.")
+      setError("Cannot connect to server. Please try again later.")
     } finally {
       setLoading(false)
     }

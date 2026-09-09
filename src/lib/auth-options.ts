@@ -45,32 +45,37 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
-        const user = await prisma.user.findUnique({
-          where: { username: credentials.username as string },
-        })
+        try {
+          const user = await prisma.user.findUnique({
+            where: { username: credentials.username as string },
+          })
 
-        if (!user) {
+          if (!user) {
+            return null
+          }
+
+          if (user.status !== "Active") {
+            return null
+          }
+
+          const isPasswordValid = await bcrypt.compare(
+            credentials.password as string,
+            user.password
+          )
+
+          if (!isPasswordValid) {
+            return null
+          }
+
+          return {
+            id: String(user.id),
+            username: user.username,
+            fullName: user.fullName,
+            role: user.role,
+          }
+        } catch (error) {
+          console.error("Auth error:", error)
           return null
-        }
-
-        if (user.status !== "Active") {
-          return null
-        }
-
-        const isPasswordValid = await bcrypt.compare(
-          credentials.password as string,
-          user.password
-        )
-
-        if (!isPasswordValid) {
-          return null
-        }
-
-        return {
-          id: String(user.id),
-          username: user.username,
-          fullName: user.fullName,
-          role: user.role,
         }
       },
     }),

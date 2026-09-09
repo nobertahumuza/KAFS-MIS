@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
   },
   env: {
     NEXTAUTH_URL: process.env.NEXTAUTH_URL || 'http://localhost:3000',
+    NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET || 'a48c993ad3e3f99198df3895038fbd7febde4ea266a0c55ed8c8f0c93a518bdf',
   },
 }
 
