@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { Search, Plus, Eye, Edit, Users, ChevronLeft, ChevronRight } from "lucide-react"
+import { Search, Plus, Eye, Edit, Trash2, Users, ChevronLeft, ChevronRight } from "lucide-react"
 import PageHeader from "@/components/ui/PageHeader"
 import Table from "@/components/ui/Table"
 import Badge, { getStatusVariant } from "@/components/ui/Badge"
@@ -43,6 +43,7 @@ export default function MembersPage() {
   const [total, setTotal] = useState(0)
   const [selectedMember, setSelectedMember] = useState<Member | null>(null)
   const [detailModalOpen, setDetailModalOpen] = useState(false)
+  const [deleting, setDeleting] = useState<number | null>(null)
 
   const fetchMembers = useCallback(async () => {
     setLoading(true)
@@ -74,6 +75,24 @@ export default function MembersPage() {
   useEffect(() => {
     setPage(1)
   }, [search])
+
+  const handleDelete = async (memberId: number, name: string) => {
+    if (!confirm(`Are you sure you want to delete member "${name}"? This action cannot be undone.`)) return
+    setDeleting(memberId)
+    try {
+      const res = await fetch(`/api/members/${memberId}`, { method: "DELETE" })
+      if (!res.ok) {
+        const data = await res.json()
+        alert(data.error || "Failed to delete member")
+        return
+      }
+      fetchMembers()
+    } catch {
+      alert("Failed to delete member")
+    } finally {
+      setDeleting(null)
+    }
+  }
 
   type Row = Record<string, unknown>
 
@@ -140,6 +159,21 @@ export default function MembersPage() {
             title="Edit"
           >
             <Edit className="w-4 h-4" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              handleDelete(item.id as number, item.farmerName as string)
+            }}
+            disabled={deleting === item.id}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
+            title="Delete"
+          >
+            {deleting === item.id ? (
+              <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Trash2 className="w-4 h-4" />
+            )}
           </button>
         </div>
       ),

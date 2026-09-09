@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Search, Plus, Shield, Edit, Key } from "lucide-react"
+import { Search, Plus, Shield, Edit, Key, Trash2, ToggleLeft, ToggleRight } from "lucide-react"
 import PageHeader from "@/components/ui/PageHeader"
 import Table from "@/components/ui/Table"
 import Badge, { getStatusVariant } from "@/components/ui/Badge"
@@ -31,7 +31,7 @@ const initialForm: FormData = {
   fullName: "",
   username: "",
   password: "",
-  role: "Teller",
+  role: "Cashier",
 }
 
 interface PasswordFormData {
@@ -52,6 +52,8 @@ export default function UsersPage() {
   const [submitError, setSubmitError] = useState("")
   const [passwordForm, setPasswordForm] = useState<PasswordFormData>({ userId: 0, newPassword: "", confirmPassword: "" })
   const [passwordError, setPasswordError] = useState("")
+  const [toggling, setToggling] = useState<number | null>(null)
+  const [deleting, setDeleting] = useState<number | null>(null)
 
   const fetchUsers = useCallback(async () => {
     setLoading(true)
@@ -69,6 +71,47 @@ export default function UsersPage() {
   }, [])
 
   useEffect(() => { fetchUsers() }, [fetchUsers])
+
+  const handleToggleStatus = async (userId: number, currentStatus: string) => {
+    const newStatus = currentStatus === "Active" ? "Disabled" : "Active"
+    if (!confirm(`Are you sure you want to ${newStatus === "Disabled" ? "disable" : "enable"} this user?`)) return
+    setToggling(userId)
+    try {
+      const res = await fetch(`/api/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        alert(data.error || "Failed to update status")
+        return
+      }
+      fetchUsers()
+    } catch {
+      alert("Failed to update status")
+    } finally {
+      setToggling(null)
+    }
+  }
+
+  const handleDelete = async (userId: number, username: string) => {
+    if (!confirm(`Are you sure you want to delete user "${username}"? This action cannot be undone.`)) return
+    setDeleting(userId)
+    try {
+      const res = await fetch(`/api/users/${userId}`, { method: "DELETE" })
+      if (!res.ok) {
+        const data = await res.json()
+        alert(data.error || "Failed to delete user")
+        return
+      }
+      fetchUsers()
+    } catch {
+      alert("Failed to delete user")
+    } finally {
+      setDeleting(null)
+    }
+  }
 
   const validateForm = (): boolean => {
     const errors: Partial<Record<keyof FormData, string>> = {}
@@ -162,7 +205,8 @@ export default function UsersPage() {
       header: "Role",
       render: (item: Record<string, unknown>) => {
         const role = item.role as string
-        return <Badge variant={role === "Admin" ? "danger" : role === "Manager" ? "info" : "default"}>{role}</Badge>
+        const roleVariant = role === "Admin" ? "danger" : role === "Treasurer" ? "warning" : role === "LoansOfficer" ? "info" : "default"
+        return <Badge variant={roleVariant}>{role}</Badge>
       },
     },
     {
@@ -183,18 +227,52 @@ export default function UsersPage() {
       key: "actions",
       header: "Actions",
       render: (item: Record<string, unknown>) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          icon={<Key className="w-3 h-3" />}
-          onClick={(e) => {
-            e.stopPropagation()
-            setPasswordForm({ userId: item.id as number, newPassword: "", confirmPassword: "" })
-            setPasswordModalOpen(true)
-          }}
-        >
-          Password
-        </Button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              handleToggleStatus(item.id as number, item.status as string)
+            }}
+            disabled={toggling === item.id || (item.username as string) === "admin"}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors disabled:opacity-50"
+            title={item.status === "Active" ? "Disable" : "Enable"}
+          >
+            {toggling === item.id ? (
+              <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+            ) : item.status === "Active" ? (
+              <ToggleRight className="w-4 h-4 text-green-500" />
+            ) : (
+              <ToggleLeft className="w-4 h-4 text-gray-400" />
+            )}
+          </button>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<Key className="w-3 h-3" />}
+            onClick={(e) => {
+              e.stopPropagation()
+              setPasswordForm({ userId: item.id as number, newPassword: "", confirmPassword: "" })
+              setPasswordModalOpen(true)
+            }}
+          >
+            Password
+          </Button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              handleDelete(item.id as number, item.username as string)
+            }}
+            disabled={deleting === item.id || (item.username as string) === "admin"}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
+            title="Delete"
+          >
+            {deleting === item.id ? (
+              <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Trash2 className="w-4 h-4" />
+            )}
+          </button>
+        </div>
       ),
     },
   ]
@@ -265,8 +343,9 @@ export default function UsersPage() {
             value={form.role}
             onChange={(e) => setForm((p) => ({ ...p, role: e.target.value }))}
             options={[
-              { value: "Teller", label: "Teller" },
-              { value: "Manager", label: "Manager" },
+              { value: "Cashier", label: "Cashier" },
+              { value: "LoansOfficer", label: "Loans Officer" },
+              { value: "Treasurer", label: "Treasurer" },
               { value: "Admin", label: "Admin" },
             ]}
           />
