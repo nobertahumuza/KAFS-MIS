@@ -1,26 +1,11 @@
 import { NextResponse } from "next/server"
-import { PrismaClient } from "@prisma/client"
-import { PrismaLibSql } from "@prisma/adapter-libsql"
+import prisma from "@/lib/prisma"
 import bcrypt from "bcryptjs"
 
-function createPrismaClient() {
-  if (process.env.TURSO_DATABASE_URL) {
-    const adapter = new PrismaLibSql({
-      url: process.env.TURSO_DATABASE_URL,
-      authToken: process.env.TURSO_AUTH_TOKEN,
-    })
-    return new PrismaClient({ adapter })
-  }
-  return new PrismaClient()
-}
-
 export async function POST() {
-  const prisma = createPrismaClient()
-
   try {
     console.log("Seeding database via API...")
 
-    // Users
     const users = [
       { fullName: "System Administrator", username: "admin", password: "admin123", role: "Admin" },
       { fullName: "Cashier User", username: "cashier", password: "cashier123", role: "Cashier" },
@@ -42,7 +27,6 @@ export async function POST() {
       })
     }
 
-    // Account Types
     const accountTypes = [
       { typeName: "Savings", requiresOtherText: false },
       { typeName: "Fixed Deposit", requiresOtherText: false },
@@ -57,7 +41,6 @@ export async function POST() {
       })
     }
 
-    // App Settings
     const settings = [
       { settingKey: "company_name", settingValue: "Kataho Farmers SACCO" },
       { settingKey: "sacco_reg_number", settingValue: "KAFS-001" },
@@ -79,7 +62,6 @@ export async function POST() {
       })
     }
 
-    // Chart of Accounts
     const chartAccounts = [
       { accountCode: "1000", accountName: "Cash and Cash Equivalents", accountType: "Asset" },
       { accountCode: "1010", accountName: "Petty Cash", accountType: "Asset" },
@@ -121,7 +103,6 @@ export async function POST() {
       })
     }
 
-    // SMS Templates
     const smsTemplates = [
       { templateName: "Welcome", templateKey: "welcome", messageBody: "Dear {name}, welcome to Kataho Farmers SACCO. Your member code is {code}. Thank you for joining us!" },
       { templateName: "Savings Confirmation", templateKey: "savings_deposit", messageBody: "Dear {name}, your savings deposit of UGX {amount} has been confirmed. New balance: UGX {balance}. Ref: {ref}" },
@@ -139,7 +120,6 @@ export async function POST() {
       })
     }
 
-    // SMS Settings
     const smsSettings = [
       { settingKey: "api_username", settingValue: "nobtechworld" },
       { settingKey: "api_password", settingValue: "9da115d9939022ecd051cdfd29b6982f8357c1e0c48a0b95" },
