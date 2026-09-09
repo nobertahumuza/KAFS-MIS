@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Printer, Calendar, TrendingUp, Users, DollarSign, FileText, Shield } from "lucide-react"
+import { Printer, Calendar, TrendingUp, Users, DollarSign, FileText, Shield, Mail, Download } from "lucide-react"
 import PageHeader from "@/components/ui/PageHeader"
 import Table from "@/components/ui/Table"
 import Badge from "@/components/ui/Badge"
@@ -70,6 +70,8 @@ export default function ReportsPage() {
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
   const [loading, setLoading] = useState(true)
+  const [emailLoading, setEmailLoading] = useState(false)
+  const [pdfLoading, setPdfLoading] = useState(false)
 
   const [savingsReport, setSavingsReport] = useState<SavingsReport>({ totalDeposits: 0, totalWithdrawals: 0, netSavings: 0, transactionCount: 0, recentTransactions: [] })
   const [loansReport, setLoansReport] = useState<LoansReport>({ totalLoans: 0, activeLoans: 0, totalDisbursed: 0, totalRepaid: 0, outstandingBalance: 0, recentLoans: [] })
@@ -161,6 +163,135 @@ export default function ReportsPage() {
 
   const handlePrint = () => { window.print() }
 
+  const handleSendEmail = async () => {
+    setEmailLoading(true)
+    try {
+      const endpoint = activeTab === "savings" || activeTab === "financial" || activeTab === "audit"
+        ? "/api/reports/daily"
+        : activeTab === "loans"
+        ? "/api/reports/weekly"
+        : "/api/reports/monthly"
+      const res = await fetch(endpoint, { method: "POST" })
+      const data = await res.json()
+      if (data.success) {
+        alert(`${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} report sent to email successfully!`)
+      } else {
+        alert(`Failed to send: ${data.error || "Unknown error"}`)
+      }
+    } catch {
+      alert("Failed to send report email")
+    } finally {
+      setEmailLoading(false)
+    }
+  }
+
+  const handleDownloadPDF = async () => {
+    setPdfLoading(true)
+    try {
+      const { default: jsPDF } = await import("jspdf")
+      const { default: autoTable } = await import("jspdf-autotable")
+
+      const doc = new jsPDF()
+      const pageWidth = doc.internal.pageSize.getWidth()
+
+      doc.setFontSize(18)
+      doc.text("KAFS SACCO", pageWidth / 2, 20, { align: "center" })
+      doc.setFontSize(14)
+      doc.text(`${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Report`, pageWidth / 2, 28, { align: "center" })
+      doc.setFontSize(10)
+      doc.text(`Generated: ${new Date().toLocaleDateString()}`, pageWidth / 2, 34, { align: "center" })
+
+      let y = 42
+
+      if (activeTab === "savings") {
+        doc.setFontSize(12)
+        doc.text("Summary", 14, y); y += 8
+        autoTable(doc, {
+          startY: y,
+          head: [["Metric", "Value"]],
+          body: [
+            ["Total Deposits", formatUGX(savingsReport.totalDeposits)],
+            ["Total Withdrawals", formatUGX(savingsReport.totalWithdrawals)],
+            ["Net Savings", formatUGX(savingsReport.netSavings)],
+          ],
+        })
+        y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10
+        doc.text("Recent Transactions", 14, y); y += 8
+        autoTable(doc, {
+          startY: y,
+          head: [["Type", "Member", "Amount", "Date"]],
+          body: savingsReport.recentTransactions.map(t => [
+            t.transactionType,
+            t.memberName,
+            formatUGX(t.amount),
+            formatDate(t.transactionDate),
+          ]),
+        })
+      } else if (activeTab === "loans") {
+        doc.setFontSize(12)
+        doc.text("Summary", 14, y); y += 8
+        autoTable(doc, {
+          startY: y,
+          head: [["Metric", "Value"]],
+          body: [
+            ["Total Loans", String(loansReport.totalLoans)],
+            ["Active Loans", String(loansReport.activeLoans)],
+            ["Total Disbursed", formatUGX(loansReport.totalDisbursed)],
+            ["Outstanding Balance", formatUGX(loansReport.outstandingBalance)],
+          ],
+        })
+        y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10
+        doc.text("Recent Loans", 14, y); y += 8
+        autoTable(doc, {
+          startY: y,
+          head: [["Code", "Member", "Amount", "Status"]],
+          body: loansReport.recentLoans.map(l => [
+            l.loanCode,
+            l.memberName,
+            formatUGX(l.principalAmount),
+            l.loanStatus,
+          ]),
+        })
+      } else if (activeTab === "members") {
+        doc.setFontSize(12)
+        doc.text("Summary", 14, y); y += 8
+        autoTable(doc, {
+          startY: y,
+          head: [["Metric", "Value"]],
+          body: [
+            ["Total Members", String(membersReport.totalMembers)],
+            ["Active Members", String(membersReport.activeMembers)],
+            ["New This Month", String(membersReport.newThisMonth)],
+            ["Male", String(membersReport.genderDistribution.male)],
+            ["Female", String(membersReport.genderDistribution.female)],
+          ],
+        })
+      } else if (activeTab === "financial") {
+        doc.setFontSize(12)
+        doc.text("Financial Summary", 14, y); y += 8
+        autoTable(doc, {
+          startY: y,
+          head: [["Metric", "Value"]],
+          body: [
+            ["Total Income", formatUGX(financialReport.totalIncome)],
+            ["Total Expenses", formatUGX(financialReport.totalExpenses)],
+            ["Net Worth", formatUGX(financialReport.netWorth)],
+          ],
+        })
+      }
+
+      doc.setFontSize(8)
+      doc.text("Designed by NobTechWorld | 0760 399 849", pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: "center" })
+
+      doc.save(`KAFS_${activeTab}_report_${new Date().toISOString().split("T")[0]}.pdf`)
+    } catch (err) {
+      console.error("PDF generation failed:", err)
+      alert("Failed to generate PDF")
+    } finally {
+      setPdfLoading(false)
+    }
+  }
+
   const savingsColumns = [
     { key: "transactionType", header: "Type", render: (item: Record<string, unknown>) => <Badge variant={item.transactionType === "Deposit" ? "success" : "warning"}>{item.transactionType as string}</Badge> },
     { key: "amount", header: "Amount", className: "text-right", render: (item: Record<string, unknown>) => <span className="font-semibold">{formatUGX(item.amount as number)}</span> },
@@ -180,9 +311,17 @@ export default function ReportsPage() {
         title="Reports"
         subtitle="View SACCO reports and analytics"
         actions={
-          <Button variant="outline" icon={<Printer className="w-4 h-4" />} onClick={handlePrint}>
-            Print Report
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" icon={<Mail className="w-4 h-4" />} onClick={handleSendEmail} loading={emailLoading}>
+              Email Report
+            </Button>
+            <Button variant="outline" icon={<Download className="w-4 h-4" />} onClick={handleDownloadPDF} loading={pdfLoading}>
+              Download PDF
+            </Button>
+            <Button variant="outline" icon={<Printer className="w-4 h-4" />} onClick={handlePrint}>
+              Print
+            </Button>
+          </div>
         }
       />
 

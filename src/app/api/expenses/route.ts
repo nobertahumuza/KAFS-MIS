@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { notifyExpenseRecorded } from "@/lib/notify"
 
 export async function GET(request: NextRequest) {
   try {
@@ -91,6 +92,8 @@ export async function POST(request: NextRequest) {
         paymentMethod: paymentMethod || "Cash",
       },
     })
+
+    notifyExpenseRecorded(description.trim(), Number(amount), category.trim())
 
     return NextResponse.json({ message: "Expense recorded successfully", expense }, { status: 201 })
   } catch (error) {

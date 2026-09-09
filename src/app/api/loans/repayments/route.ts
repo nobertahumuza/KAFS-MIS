@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { generateReference } from "@/lib/utils"
 import { smsLoanRepayment } from "@/lib/sms"
+import { notifyLoanRepaid } from "@/lib/notify"
 
 export async function GET(request: NextRequest) {
   try {
@@ -165,6 +166,7 @@ export async function POST(request: NextRequest) {
     })
 
     smsLoanRepayment(loan.memberId, amountPaid, newBalance, referenceNumber)
+    notifyLoanRepaid(loan.memberId, loan.member.farmerName, amountPaid, referenceNumber)
 
     return NextResponse.json(
       {

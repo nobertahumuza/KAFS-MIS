@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { smsLoanApproval, smsLoanRejection } from "@/lib/sms"
+import { notifyLoanApproval, notifyLoanRejection } from "@/lib/notify"
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -143,6 +145,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
           details: `Application status updated from "${existing.status}" to "${status}"`,
         },
       })
+
+      if (status === "Approved") {
+        smsLoanApproval(existing.memberId, existing.applicationCode, existing.loanAmount || 0)
+        notifyLoanApproval(existing.memberId, application.member.farmerName, existing.applicationCode)
+      } else if (status === "Rejected") {
+        smsLoanRejection(existing.memberId, existing.applicationCode, existing.loanAmount || 0)
+        notifyLoanRejection(existing.memberId, application.member.farmerName, existing.applicationCode)
+      }
     }
 
     if (Array.isArray(guarantors)) {

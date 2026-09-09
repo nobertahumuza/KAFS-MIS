@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { generateApplicationCode } from "@/lib/utils"
+import { notifyLoanApplication } from "@/lib/notify"
 
 export async function GET(request: NextRequest) {
   try {
@@ -232,6 +233,11 @@ export async function POST(request: NextRequest) {
         details: `Loan application ${application.applicationCode} created for UGX ${loanAmount.toLocaleString()}`,
       },
     })
+
+    const memberData = await prisma.member.findUnique({ where: { id: memberId }, select: { farmerName: true } })
+    if (memberData) {
+      notifyLoanApplication(memberId, memberData.farmerName, application.applicationCode, loanAmount)
+    }
 
     return NextResponse.json(
       { message: "Loan application created successfully", application },

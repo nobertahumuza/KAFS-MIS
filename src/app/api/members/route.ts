@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { generateMemberCode, generateAccountNo } from "@/lib/utils"
+import { smsAccountOpening } from "@/lib/sms"
+import { notifyMemberRegistered, notifyAccountOpened } from "@/lib/notify"
 
 export async function GET(request: NextRequest) {
   try {
@@ -144,6 +146,12 @@ export async function POST(request: NextRequest) {
         status: "Active",
       },
     })
+
+    const accountNo = generateAccountNo(accNextIndex)
+
+    smsAccountOpening(member.id, accountNo, "Savings", 0).catch(() => {})
+    notifyMemberRegistered(member.id, farmerName.trim(), memberCode).catch(() => {})
+    notifyAccountOpened(member.id, farmerName.trim(), accountNo).catch(() => {})
 
     return NextResponse.json(
       { message: "Member registered successfully", member },

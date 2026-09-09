@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import {
   Search, Plus, Eye, FileText, ChevronLeft, ChevronRight, Check, User,
-  DollarSign, Users, Shield, Heart, ClipboardCheck, UsersRound, Award, X
+  DollarSign, Users, Shield, Heart, ClipboardCheck, UsersRound, Award, X, Download
 } from "lucide-react"
 import PageHeader from "@/components/ui/PageHeader"
 import Table from "@/components/ui/Table"
@@ -213,6 +213,50 @@ export default function LoanApplicationsPage() {
 
   useEffect(() => { fetchApplications() }, [fetchApplications])
   useEffect(() => { setPage(1) }, [search, statusFilter])
+
+  const handleDownloadPDF = async () => {
+    try {
+      const { default: jsPDF } = await import("jspdf")
+      const { default: autoTable } = await import("jspdf-autotable")
+
+      const doc = new jsPDF()
+      const pageWidth = doc.internal.pageSize.getWidth()
+
+      doc.setFontSize(18)
+      doc.text("KAFS SACCO", pageWidth / 2, 20, { align: "center" })
+      doc.setFontSize(14)
+      doc.text("Loan Applications Report", pageWidth / 2, 28, { align: "center" })
+      doc.setFontSize(10)
+      doc.text(`Generated: ${new Date().toLocaleDateString()} | Total: ${total} applications`, pageWidth / 2, 34, { align: "center" })
+
+      const tableData = applications.map((app) => [
+        app.applicationCode,
+        app.member.farmerName,
+        app.member.memberCode,
+        app.loanPurpose || "-",
+        formatUGX(app.loanAmount || 0),
+        `${app.loanDuration || 0} months`,
+        app.status,
+        formatDate(app.createdAt),
+      ])
+
+      autoTable(doc, {
+        startY: 40,
+        head: [["Code", "Applicant Name", "Member Code", "Purpose", "Amount", "Duration", "Status", "Date"]],
+        body: tableData,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [41, 128, 185] },
+      })
+
+      doc.setFontSize(8)
+      doc.text("Designed by NobTechWorld | 0760 399 849", pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: "center" })
+
+      doc.save(`KAFS_loan_applications_${new Date().toISOString().split("T")[0]}.pdf`)
+    } catch (err) {
+      console.error("PDF generation failed:", err)
+      alert("Failed to generate PDF")
+    }
+  }
 
   const searchMembers = useCallback(async (query: string) => {
     if (query.length < 2) { setMemberOptions([]); return }
@@ -827,9 +871,14 @@ export default function LoanApplicationsPage() {
         title="Loan Applications"
         subtitle={`${total} total applications`}
         actions={
-          <Button icon={<Plus className="w-4 h-4" />} onClick={() => { setWizardOpen(true); setCurrentStep(0) }}>
-            New Application
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" icon={<Download className="w-4 h-4" />} onClick={handleDownloadPDF}>
+              Download PDF
+            </Button>
+            <Button icon={<Plus className="w-4 h-4" />} onClick={() => { setWizardOpen(true); setCurrentStep(0) }}>
+              New Application
+            </Button>
+          </div>
         }
       />
 

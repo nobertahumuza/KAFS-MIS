@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { generateLoanCode, generateApplicationCode } from "@/lib/utils"
 import { smsLoanDisbursement } from "@/lib/sms"
+import { notifyLoanDisbursed } from "@/lib/notify"
 
 export async function GET(request: NextRequest) {
   try {
@@ -234,6 +235,7 @@ export async function POST(request: NextRequest) {
 
     const dueDateStr = dueDate.toISOString().split("T")[0]
     smsLoanDisbursement(memberId, loanCode, principalAmount, Math.round(monthlyInstallment), dueDateStr)
+    notifyLoanDisbursed(memberId, member.farmerName, loanCode, principalAmount)
 
     return NextResponse.json(
       { message: "Loan disbursed successfully", loan },

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { generateReference } from "@/lib/utils"
 import { smsSavingsDeposit, smsSavingsWithdrawal } from "@/lib/sms"
+import { notifySavingsDeposit, notifySavingsWithdrawal } from "@/lib/notify"
 
 export async function GET(request: NextRequest) {
   try {
@@ -171,8 +172,10 @@ export async function POST(request: NextRequest) {
 
     if (transactionType === "Deposit") {
       smsSavingsDeposit(memberId, amount, newBalance, referenceNumber)
+      notifySavingsDeposit(memberId, member.farmerName, amount, referenceNumber)
     } else {
       smsSavingsWithdrawal(memberId, amount, newBalance, referenceNumber)
+      notifySavingsWithdrawal(memberId, member.farmerName, amount, referenceNumber)
     }
 
     return NextResponse.json(
