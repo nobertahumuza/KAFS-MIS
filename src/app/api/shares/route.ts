@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { smsSharePurchase } from "@/lib/sms"
 
 export async function GET(request: NextRequest) {
   try {
@@ -102,6 +103,8 @@ export async function POST(request: NextRequest) {
         shareValue: { increment: totalAmount },
       },
     })
+
+    smsSharePurchase(Number(memberId), qty, price, totalAmount, referenceNumber)
 
     return NextResponse.json({ message: "Shares purchased successfully", member: updatedMember }, { status: 201 })
   } catch (error) {

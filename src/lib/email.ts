@@ -1,14 +1,34 @@
 import nodemailer from "nodemailer"
+import prisma from "@/lib/prisma"
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || "smtp.gmail.com",
-  port: Number(process.env.SMTP_PORT) || 465,
-  secure: true,
-  auth: {
-    user: process.env.SMTP_USER || "nobtechworld2@gmail.com",
-    pass: process.env.SMTP_PASS || "",
-  },
-})
+async function getSmtpConfig() {
+  const rows = await prisma.appSetting.findMany()
+  const s: Record<string, string> = {}
+  rows.forEach((r) => { s[r.settingKey] = r.settingValue || "" })
+  return {
+    host: s.email_host || "smtp.gmail.com",
+    port: Number(s.email_port) || 465,
+    user: s.email_user || "",
+    pass: s.email_password || "",
+    from: s.email_from || s.email_user || "",
+    enabled: s.email_enabled === "true",
+    recipientsTo: s.report_recipients_to || "",
+    recipientsCc: s.report_recipients_cc || "",
+  }
+}
+
+async function createTransporter() {
+  const config = await getSmtpConfig()
+  return nodemailer.createTransport({
+    host: config.host,
+    port: config.port,
+    secure: config.port === 465,
+    auth: {
+      user: config.user,
+      pass: config.pass,
+    },
+  })
+}
 
 interface EmailOptions {
   to: string
@@ -19,8 +39,17 @@ interface EmailOptions {
 
 export async function sendEmail({ to, subject, html, cc }: EmailOptions) {
   try {
+    const config = await getSmtpConfig()
+    if (!config.enabled) {
+      return { success: false, error: "Email is not enabled. Go to Settings → Email and enable it." }
+    }
+    if (!config.user || !config.pass) {
+      return { success: false, error: "SMTP credentials not configured. Go to Settings → Email." }
+    }
+
+    const transporter = await createTransporter()
     const info = await transporter.sendMail({
-      from: `"KAFS SACCO" <${process.env.SMTP_USER || "nobtechworld2@gmail.com"}>`,
+      from: `"KAFS SACCO" <${config.from}>`,
       to,
       cc,
       subject,
@@ -34,17 +63,31 @@ export async function sendEmail({ to, subject, html, cc }: EmailOptions) {
   }
 }
 
-export function generateDailyReportHTML(data: {
+export async function sendReportEmail(subject: string, html: string) {
+  const config = await getSmtpConfig()
+  if (!config.enabled || !config.user || !config.pass) {
+    return { success: false, error: "Email not configured" }
+  }
+  const to = config.recipientsTo
+  const cc = config.recipientsCc
+  if (!to) {
+    return { success: false, error: "No report recipients configured" }
+  }
+  return sendEmail({ to, subject, html, cc: cc || undefined })
+}
+
+export function generateReportHTML(data: {
+  title: string
   date: string
   totalMembers: number
   totalSavings: number
   totalLoans: number
   activeLoans: number
   totalExpenses: number
-  newMembersToday: number
-  depositsToday: number
-  withdrawalsToday: number
-  loanRepaymentsToday: number
+  newMembers: number
+  deposits: number
+  withdrawals: number
+  loanRepayments: number
   recentTransactions: Array<{
     type: string
     description: string
@@ -80,7 +123,7 @@ export function generateDailyReportHTML(data: {
   <div class="container">
     <div class="header">
       <h1>Kataho Farmers SACCO</h1>
-      <p>Daily Financial Report — ${data.date}</p>
+      <p>${data.title} — ${data.date}</p>
     </div>
     <div class="content">
       <div class="metrics">
@@ -93,24 +136,24 @@ export function generateDailyReportHTML(data: {
           <div class="metric-value">${data.activeLoans}</div>
         </div>
         <div class="metric">
-          <div class="metric-label">Deposits Today</div>
-          <div class="metric-value inflow">UGX ${data.depositsToday.toLocaleString()}</div>
+          <div class="metric-label">Deposits</div>
+          <div class="metric-value inflow">UGX ${data.deposits.toLocaleString()}</div>
         </div>
         <div class="metric">
-          <div class="metric-label">Withdrawals Today</div>
-          <div class="metric-value outflow">UGX ${data.withdrawalsToday.toLocaleString()}</div>
+          <div class="metric-label">Withdrawals</div>
+          <div class="metric-value outflow">UGX ${data.withdrawals.toLocaleString()}</div>
         </div>
         <div class="metric">
-          <div class="metric-label">Loan Repayments Today</div>
-          <div class="metric-value inflow">UGX ${data.loanRepaymentsToday.toLocaleString()}</div>
+          <div class="metric-label">Loan Repayments</div>
+          <div class="metric-value inflow">UGX ${data.loanRepayments.toLocaleString()}</div>
         </div>
         <div class="metric">
-          <div class="metric-label">Expenses This Month</div>
+          <div class="metric-label">Expenses</div>
           <div class="metric-value outflow">UGX ${data.totalExpenses.toLocaleString()}</div>
         </div>
         <div class="metric">
-          <div class="metric-label">New Members Today</div>
-          <div class="metric-value">${data.newMembersToday}</div>
+          <div class="metric-label">New Members</div>
+          <div class="metric-value">${data.newMembers}</div>
         </div>
         <div class="metric">
           <div class="metric-label">Total Savings</div>
@@ -136,7 +179,7 @@ export function generateDailyReportHTML(data: {
             </tr>`
             )
             .join("")}
-          ${data.recentTransactions.length === 0 ? '<tr><td colspan="3" style="text-align:center;color:#94a3b8;">No transactions today</td></tr>' : ""}
+          ${data.recentTransactions.length === 0 ? '<tr><td colspan="3" style="text-align:center;color:#94a3b8;">No transactions</td></tr>' : ""}
         </tbody>
       </table>
     </div>

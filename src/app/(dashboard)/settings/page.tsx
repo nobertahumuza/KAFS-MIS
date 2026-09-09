@@ -37,6 +37,10 @@ export default function SettingsPage() {
   const [emailPassword, setEmailPassword] = useState("")
   const [emailFrom, setEmailFrom] = useState("")
   const [emailEnabled, setEmailEnabled] = useState(false)
+  const [reportRecipientsTo, setReportRecipientsTo] = useState("")
+  const [reportRecipientsCc, setReportRecipientsCc] = useState("")
+  const [testSmsLoading, setTestSmsLoading] = useState(false)
+  const [testEmailLoading, setTestEmailLoading] = useState(false)
 
   const fetchSettings = useCallback(async () => {
     setLoading(true)
@@ -66,6 +70,8 @@ export default function SettingsPage() {
         setEmailPassword(s.email_password || "")
         setEmailFrom(s.email_from || "")
         setEmailEnabled(s.email_enabled === "true")
+        setReportRecipientsTo(s.report_recipients_to || "")
+        setReportRecipientsCc(s.report_recipients_cc || "")
       }
     } catch (err) {
       console.error("Failed to fetch settings:", err)
@@ -104,6 +110,8 @@ export default function SettingsPage() {
         settings.email_password = emailPassword
         settings.email_from = emailFrom
         settings.email_enabled = String(emailEnabled)
+        settings.report_recipients_to = reportRecipientsTo
+        settings.report_recipients_cc = reportRecipientsCc
       }
 
       const res = await fetch("/api/settings", {
@@ -121,6 +129,48 @@ export default function SettingsPage() {
       alert("Failed to save settings")
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleTestSms = async () => {
+    setTestSmsLoading(true)
+    try {
+      const res = await fetch("/api/sms/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phoneNumber: "0760399849",
+          message: "Test SMS from KAFS SACCO Management System. If you received this, SMS is configured correctly!",
+          messageType: "Test",
+        }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        alert("Test SMS sent successfully!")
+      } else {
+        alert(`SMS failed: ${data.error || "Unknown error"}`)
+      }
+    } catch {
+      alert("Failed to send test SMS")
+    } finally {
+      setTestSmsLoading(false)
+    }
+  }
+
+  const handleTestEmail = async () => {
+    setTestEmailLoading(true)
+    try {
+      const res = await fetch("/api/reports/daily", { method: "POST" })
+      const data = await res.json()
+      if (data.success) {
+        alert("Test email report sent successfully!")
+      } else {
+        alert(`Email failed: ${data.error || "Unknown error"}`)
+      }
+    } catch {
+      alert("Failed to send test email")
+    } finally {
+      setTestEmailLoading(false)
     }
   }
 
@@ -279,8 +329,18 @@ export default function SettingsPage() {
                 label="API Base URL"
                 value={smsBaseUrl}
                 onChange={(e) => setSmsBaseUrl(e.target.value)}
-                placeholder="https://app.egosms.co/api/v1"
+                placeholder="https://comms.egosms.co/api/v1/plain/"
               />
+            </div>
+            <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
+              <Button
+                variant="outline"
+                onClick={handleTestSms}
+                loading={testSmsLoading}
+                disabled={!smsEnabled}
+              >
+                Send Test SMS
+              </Button>
             </div>
           </div>
         </Card>
@@ -341,6 +401,34 @@ export default function SettingsPage() {
               onChange={(e) => setEmailFrom(e.target.value)}
               placeholder="noreply@sacco.com"
             />
+            <div className="pt-4 border-t border-gray-200 dark:border-gray-700 space-y-4">
+              <h4 className="text-sm font-semibold text-gray-900 dark:text-white">Report Recipients</h4>
+              <Input
+                label="To (comma-separated)"
+                value={reportRecipientsTo}
+                onChange={(e) => setReportRecipientsTo(e.target.value)}
+                placeholder="najunapacious@gmail.com,Paciousnajuna27@iCloud.com"
+              />
+              <Input
+                label="CC (comma-separated)"
+                value={reportRecipientsCc}
+                onChange={(e) => setReportRecipientsCc(e.target.value)}
+                placeholder="bturinawe30@gmail.com,katahofarmerssacco@gmail.com"
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Reports are sent automatically: Daily at 6PM, Weekly on Monday at 6PM, Monthly on the 1st at 6PM.
+              </p>
+            </div>
+            <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
+              <Button
+                variant="outline"
+                onClick={handleTestEmail}
+                loading={testEmailLoading}
+                disabled={!emailEnabled}
+              >
+                Send Test Report
+              </Button>
+            </div>
           </div>
         </Card>
       )}

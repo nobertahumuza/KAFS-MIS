@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { generateReference } from "@/lib/utils"
+import { smsLoanRepayment } from "@/lib/sms"
 
 export async function GET(request: NextRequest) {
   try {
@@ -163,19 +164,7 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    if (loan.member.phoneNumber) {
-      const message = `Dear ${loan.member.farmerName}, your payment of UGX ${amountPaid.toLocaleString()} for loan ${loan.loanCode} has been received. New balance: UGX ${newBalance.toLocaleString()}. Ref: ${referenceNumber}. - KAFS SACCO`
-
-      await prisma.smsLog.create({
-        data: {
-          memberId: loan.memberId,
-          phoneNumber: loan.member.phoneNumber,
-          message,
-          messageType: "Transaction",
-          status: "Pending",
-        },
-      })
-    }
+    smsLoanRepayment(loan.memberId, amountPaid, newBalance, referenceNumber)
 
     return NextResponse.json(
       {

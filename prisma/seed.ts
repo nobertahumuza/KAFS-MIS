@@ -49,6 +49,27 @@ async function main() {
     loan_interest_rate: "2.5",
     savings_interest_threshold: "500000",
     withdrawal_fee: "500",
+    // EgoSMS Configuration
+    sms_provider: "EgoSMS",
+    sms_api_key: "nobtechworld",
+    sms_api_secret: "9da115d9939022ecd051cdfd29b6982f8357c1e0c48a0b95",
+    sms_sender_id: "KAFS",
+    sms_base_url: "https://comms.egosms.co/api/v1/plain/",
+    sms_enabled: "true",
+    // Email Configuration (Gmail SMTP)
+    email_host: "smtp.gmail.com",
+    email_port: "465",
+    email_user: "nobtechworld2@gmail.com",
+    email_password: "",
+    email_from: "nobtechworld2@gmail.com",
+    email_enabled: "false",
+    // Report Recipients
+    report_recipients_to: "najunapacious@gmail.com,Paciousnajuna27@iCloud.com",
+    report_recipients_cc: "bturinawe30@gmail.com,katahofarmerssacco@gmail.com,nobtechworld2@gmail.com",
+    // Report Schedule
+    report_daily_enabled: "true",
+    report_weekly_enabled: "true",
+    report_monthly_enabled: "true",
   }
 
   for (const [key, value] of Object.entries(settings)) {
@@ -58,7 +79,7 @@ async function main() {
       create: { settingKey: key, settingValue: value },
     })
   }
-  console.log("  ✓ App Settings seeded")
+  console.log("  ✓ App Settings seeded (including EgoSMS + Email)")
 
   // ── Chart of Accounts ──────────────────────────────────
   const chartAccounts = [
@@ -92,10 +113,28 @@ async function main() {
         "Dear {member_name}, welcome to KATAHO FARMERS' SACCO. Your member code is {member_code}. Thank you for joining us!",
     },
     {
-      templateName: "Savings Confirmation",
-      templateKey: "savings_confirmation",
+      templateName: "Account Opening",
+      templateKey: "account_opening",
       messageBody:
-        "Dear {member_name}, your {transaction_type} of UGX {amount} has been processed. New balance: UGX {balance}. Ref: {reference}.",
+        "Dear {member_name}, your {account_type} account ({account_no}) has been opened successfully. Initial deposit: UGX {amount}. Welcome to KATAHO FARMERS' SACCO!",
+    },
+    {
+      templateName: "Savings Deposit",
+      templateKey: "savings_deposit",
+      messageBody:
+        "Dear {member_name}, your deposit of UGX {amount} has been processed successfully. New balance: UGX {balance}. Ref: {reference}.",
+    },
+    {
+      templateName: "Savings Withdrawal",
+      templateKey: "savings_withdrawal",
+      messageBody:
+        "Dear {member_name}, your withdrawal of UGX {amount} has been processed. New balance: UGX {balance}. Ref: {reference}.",
+    },
+    {
+      templateName: "Loan Disbursement",
+      templateKey: "loan_disbursement",
+      messageBody:
+        "Dear {member_name}, your loan of UGX {amount} ({loan_code}) has been disbursed. Monthly installment: UGX {installment}. Due: {due_date}.",
     },
     {
       templateName: "Loan Repayment",
@@ -103,35 +142,40 @@ async function main() {
       messageBody:
         "Dear {member_name}, your loan repayment of UGX {amount} has been received. Outstanding balance: UGX {balance}. Ref: {reference}.",
     },
+    {
+      templateName: "Loan Approval",
+      templateKey: "loan_approval",
+      messageBody:
+        "Dear {member_name}, your loan application ({application_code}) for UGX {amount} has been approved. Please visit the office for disbursement.",
+    },
+    {
+      templateName: "Loan Rejection",
+      templateKey: "loan_rejection",
+      messageBody:
+        "Dear {member_name}, your loan application ({application_code}) for UGX {amount} has been declined. Please contact the office for details.",
+    },
+    {
+      templateName: "Share Purchase",
+      templateKey: "share_purchase",
+      messageBody:
+        "Dear {member_name}, you have purchased {shares} shares at UGX {price} each. Total: UGX {amount}. Ref: {reference}.",
+    },
+    {
+      templateName: "Fixed Deposit",
+      templateKey: "fixed_deposit",
+      messageBody:
+        "Dear {member_name}, your fixed deposit of UGX {amount} for {period} months has been created. Maturity: {maturity_date}. Expected interest: UGX {interest}.",
+    },
   ]
 
   for (const t of smsTemplates) {
     await prisma.smsTemplate.upsert({
       where: { templateKey: t.templateKey },
-      update: { messageBody: t.messageBody },
+      update: { messageBody: t.messageBody, isActive: true },
       create: { ...t, isActive: true },
     })
   }
-  console.log("  ✓ SMS Templates seeded")
-
-  // ── SMS Settings (EgoSMS) ─────────────────────────────
-  const smsSettings: Record<string, string> = {
-    provider: "EgoSMS",
-    api_key: "",
-    api_secret: "",
-    sender_id: "KAFSSACCO",
-    base_url: "https://app.egosms.co/api/v1",
-    enabled: "false",
-  }
-
-  for (const [key, value] of Object.entries(smsSettings)) {
-    await prisma.smsSetting.upsert({
-      where: { settingKey: key },
-      update: { settingValue: value },
-      create: { settingKey: key, settingValue: value },
-    })
-  }
-  console.log("  ✓ SMS Settings seeded")
+  console.log("  ✓ SMS Templates seeded (10 templates)")
 
   console.log("\nSeeding complete!")
 }

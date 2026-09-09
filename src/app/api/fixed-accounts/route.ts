@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { smsFixedDeposit } from "@/lib/sms"
 
 export async function GET(request: NextRequest) {
   try {
@@ -103,6 +104,8 @@ export async function POST(request: NextRequest) {
       },
       include: { member: { select: { id: true, farmerName: true, memberCode: true } } },
     })
+
+    smsFixedDeposit(Number(memberId), Number(principalAmount), durationNum, maturityDate.toISOString().split("T")[0], interestEarned)
 
     return NextResponse.json({ message: "Fixed account created successfully", account }, { status: 201 })
   } catch (error) {

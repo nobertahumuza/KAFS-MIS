@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { generateAccountNo, generateMemberCode } from "@/lib/utils"
+import { smsAccountOpening } from "@/lib/sms"
 
 export async function GET(request: NextRequest) {
   try {
@@ -217,6 +218,10 @@ export async function POST(request: NextRequest) {
           referenceNumber,
         },
       })
+
+      smsAccountOpening(resolvedMemberId, accountNo, accountType, initialDeposit)
+    } else {
+      smsAccountOpening(resolvedMemberId, accountNo, accountType, 0)
     }
 
     return NextResponse.json(

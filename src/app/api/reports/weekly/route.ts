@@ -5,7 +5,8 @@ import { sendReportEmail, generateReportHTML } from "@/lib/email"
 export async function POST() {
   try {
     const now = new Date()
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const startOfWeek = new Date(now)
+    startOfWeek.setDate(now.getDate() - 7)
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
 
     const [
@@ -17,21 +18,24 @@ export async function POST() {
       prisma.loan.aggregate({ _sum: { principalAmount: true } }),
       prisma.loan.count({ where: { loanStatus: "Active" } }),
       prisma.expense.aggregate({ _sum: { amount: true }, where: { expenseDate: { gte: startOfMonth } } }),
-      prisma.member.count({ where: { createdAt: { gte: startOfDay } } }),
-      prisma.savingsLedger.aggregate({ _sum: { amount: true }, where: { transactionType: "Deposit", transactionDate: { gte: startOfDay } } }),
-      prisma.savingsLedger.aggregate({ _sum: { amount: true }, where: { transactionType: "Withdrawal", transactionDate: { gte: startOfDay } } }),
-      prisma.loanRepayment.aggregate({ _sum: { amountPaid: true }, where: { paymentDate: { gte: startOfDay } } }),
+      prisma.member.count({ where: { createdAt: { gte: startOfWeek } } }),
+      prisma.savingsLedger.aggregate({ _sum: { amount: true }, where: { transactionType: "Deposit", transactionDate: { gte: startOfWeek } } }),
+      prisma.savingsLedger.aggregate({ _sum: { amount: true }, where: { transactionType: "Withdrawal", transactionDate: { gte: startOfWeek } } }),
+      prisma.loanRepayment.aggregate({ _sum: { amountPaid: true }, where: { paymentDate: { gte: startOfWeek } } }),
       prisma.savingsLedger.findMany({
-        where: { transactionDate: { gte: startOfDay } },
+        where: { transactionDate: { gte: startOfWeek } },
         include: { member: { select: { farmerName: true } } },
         orderBy: { transactionDate: "desc" },
-        take: 20,
+        take: 30,
       }),
     ])
 
+    const weekStart = startOfWeek.toISOString().split("T")[0]
+    const weekEnd = now.toISOString().split("T")[0]
+
     const html = generateReportHTML({
-      title: "Daily Financial Report",
-      date: now.toISOString().split("T")[0],
+      title: `Weekly Report (${weekStart} to ${weekEnd})`,
+      date: weekEnd,
       totalMembers,
       totalSavings: totalSavings._sum.amount || 0,
       totalLoans: totalLoans._sum.principalAmount || 0,
@@ -49,11 +53,11 @@ export async function POST() {
       })),
     })
 
-    const result = await sendReportEmail(`KAFS SACCO Daily Report - ${now.toISOString().split("T")[0]}`, html)
+    const result = await sendReportEmail(`KAFS SACCO Weekly Report (${weekStart} to ${weekEnd})`, html)
 
     return NextResponse.json({ success: result.success, messageId: result.messageId })
   } catch (error) {
-    console.error("Daily report error:", error)
+    console.error("Weekly report error:", error)
     return NextResponse.json({ success: false, error: String(error) }, { status: 500 })
   }
 }

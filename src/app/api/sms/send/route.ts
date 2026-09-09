@@ -6,13 +6,13 @@ async function sendEgoSMS(
   message: string,
   settings: Record<string, string>
 ): Promise<{ success: boolean; providerMsgId?: string; error?: string }> {
-  const username = settings.api_username
-  const password = settings.api_password
-  const senderId = settings.sender_id || "KAFS"
-  const apiUrl = settings.api_url || "https://comms.egosms.co/api/v1/plain/"
+  const username = settings.sms_api_key || ""
+  const password = settings.sms_api_secret || ""
+  const senderId = settings.sms_sender_id || "KAFS"
+  const apiUrl = settings.sms_base_url || "https://comms.egosms.co/api/v1/plain/"
 
   if (!username || !password) {
-    return { success: false, error: "EgoSMS credentials not configured" }
+    return { success: false, error: "EgoSMS credentials not configured. Go to Settings → SMS Gateway and enter your API key and secret." }
   }
 
   const formattedPhone = phone.startsWith("+") ? phone.substring(1) : phone.startsWith("256") ? phone : "256" + phone.replace(/^0/, "")
@@ -44,14 +44,26 @@ async function sendEgoSMS(
   }
 }
 
+async function getSmsSettings(): Promise<Record<string, string>> {
+  const settingsRows = await prisma.appSetting.findMany()
+  const settings: Record<string, string> = {}
+  settingsRows.forEach((s) => { settings[s.settingKey] = s.settingValue || "" })
+  return settings
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { logIds, memberId, phoneNumber, message, messageType = "General" } = body
 
-    const settingsRows = await prisma.smsSetting.findMany()
-    const settings: Record<string, string> = {}
-    settingsRows.forEach((s) => { settings[s.settingKey] = s.settingValue || "" })
+    const settings = await getSmsSettings()
+
+    if (settings.sms_enabled !== "true") {
+      return NextResponse.json(
+        { error: "SMS is not enabled. Go to Settings → SMS Gateway and enable SMS." },
+        { status: 400 }
+      )
+    }
 
     if (Array.isArray(logIds) && logIds.length > 0) {
       const logs = await prisma.smsLog.findMany({
