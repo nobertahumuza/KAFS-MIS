@@ -144,10 +144,6 @@ export default function LoginPage() {
             </button>
           </form>
         </div>
-
-        <p className="text-center text-white/70 text-sm mt-6">
-          Designed by NobTechWorld | 0760 399 849
-        </p>
       </div>
     </div>
   )

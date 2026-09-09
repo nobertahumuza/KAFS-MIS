@@ -25,9 +25,6 @@ export default function UnauthorizedPage() {
             Go to Dashboard
           </Link>
         </div>
-        <p className="text-center text-gray-400 text-sm mt-6">
-          Designed by NobTechWorld | WhatsApp: +256 760 399 849
-        </p>
       </div>
     </div>
   )
