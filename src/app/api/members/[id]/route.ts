@@ -18,7 +18,37 @@ export async function GET(
       return NextResponse.json({ error: "Member not found" }, { status: 404 })
     }
 
-    return NextResponse.json(member)
+    const account = await prisma.customer.findFirst({ where: { memberId } })
+    const lastSavings = await prisma.savingsLedger.findFirst({
+      where: { memberId },
+      orderBy: { id: "desc" },
+      select: { balanceAfter: true },
+    })
+    const totalDeposits = await prisma.savingsLedger.aggregate({
+      _sum: { amount: true },
+      where: { memberId, transactionType: "Deposit" },
+    })
+    const totalWithdrawals = await prisma.savingsLedger.aggregate({
+      _sum: { amount: true },
+      where: { memberId, transactionType: "Withdrawal" },
+    })
+    const activeLoans = await prisma.loan.count({
+      where: { memberId, loanStatus: "Active" },
+    })
+    const totalShares = member.totalShares || 0
+
+    return NextResponse.json({
+      ...member,
+      account: account ? {
+        accountNo: account.accountNo,
+        status: account.status,
+      } : null,
+      savingsBalance: lastSavings?.balanceAfter || 0,
+      totalDeposits: totalDeposits._sum.amount || 0,
+      totalWithdrawals: totalWithdrawals._sum.amount || 0,
+      activeLoans,
+      totalShares,
+    })
   } catch (error) {
     console.error("GET /api/members/[id] error:", error)
     return NextResponse.json({ error: "Failed to fetch member" }, { status: 500 })

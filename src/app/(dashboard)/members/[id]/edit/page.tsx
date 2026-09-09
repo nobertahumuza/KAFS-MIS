@@ -2,11 +2,13 @@
 
 import { useState, useEffect, use } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Save } from "lucide-react"
+import { ArrowLeft, Save, Wallet, PiggyBank, HandCoins, TrendingUp } from "lucide-react"
 import PageHeader from "@/components/ui/PageHeader"
 import Input from "@/components/ui/Input"
 import Select from "@/components/ui/Select"
 import Button from "@/components/ui/Button"
+import { MetricCard } from "@/components/ui/Card"
+import { formatUGX, formatDate } from "@/lib/utils"
 
 interface MemberData {
   id: number
@@ -27,6 +29,13 @@ interface MemberData {
   nextOfKinName: string | null
   nextOfKinPhone: string | null
   status: string | null
+  registrationDate: string | null
+  account: { accountNo: string; status: string } | null
+  savingsBalance: number
+  totalDeposits: number
+  totalWithdrawals: number
+  activeLoans: number
+  totalShares: number
 }
 
 export default function EditMemberPage({ params }: { params: Promise<{ id: string }> }) {
@@ -121,6 +130,51 @@ export default function EditMemberPage({ params }: { params: Promise<{ id: strin
           </Button>
         }
       />
+
+      {member && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <MetricCard
+            label="Savings Balance"
+            value={formatUGX(member.savingsBalance)}
+            icon={<Wallet className="w-5 h-5" />}
+          />
+          <MetricCard
+            label="Total Deposits"
+            value={formatUGX(member.totalDeposits)}
+            icon={<PiggyBank className="w-5 h-5" />}
+          />
+          <MetricCard
+            label="Active Loans"
+            value={member.activeLoans}
+            icon={<HandCoins className="w-5 h-5" />}
+          />
+          <MetricCard
+            label="Total Shares"
+            value={member.totalShares}
+            icon={<TrendingUp className="w-5 h-5" />}
+          />
+        </div>
+      )}
+
+      {member?.account && (
+        <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm p-6">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wider">Account Information</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Account Number</p>
+              <p className="text-sm font-mono font-semibold text-[var(--color-primary)]">{member.account.accountNo}</p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Account Status</p>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">{member.account.status}</p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Registration Date</p>
+              <p className="text-sm text-gray-900 dark:text-white">{member.registrationDate ? formatDate(member.registrationDate) : "—"}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit}>
         <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm p-6 space-y-6">

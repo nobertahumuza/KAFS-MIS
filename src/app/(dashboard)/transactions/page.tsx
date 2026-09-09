@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Search, ArrowDownCircle, ArrowUpCircle, Wallet, Filter, X, FileText } from "lucide-react"
 import PageHeader from "@/components/ui/PageHeader"
 import Table from "@/components/ui/Table"
@@ -85,12 +85,13 @@ export default function TransactionsPage() {
   const [modalType, setModalType] = useState<"Deposit" | "Withdrawal">("Deposit")
   const [memberSearch, setMemberSearch] = useState("")
   const [memberOptions, setMemberOptions] = useState<MemberOption[]>([])
-  const [memberDropdownOpen, setMemberDropdownOpen] = useState(false)
   const [selectedMember, setSelectedMember] = useState<MemberOption | null>(null)
+  const [memberBalance, setMemberBalance] = useState<number | null>(null)
   const [amount, setAmount] = useState("")
   const [narration, setNarration] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState("")
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
   const fetchTransactions = useCallback(async () => {
     setLoading(true)
@@ -141,10 +142,40 @@ export default function TransactionsPage() {
     return () => clearTimeout(timer)
   }, [memberSearch, searchMembers])
 
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setMemberOptions([])
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
+
+  const fetchMemberBalance = useCallback(async (memberId: number) => {
+    try {
+      const res = await fetch(`/api/savings/balance?memberId=${memberId}`)
+      if (res.ok) {
+        const data = await res.json()
+        setMemberBalance(data.balance ?? 0)
+      }
+    } catch {
+      setMemberBalance(0)
+    }
+  }, [])
+
+  const handleMemberSelect = (member: MemberOption) => {
+    setSelectedMember(member)
+    setMemberSearch(`${member.memberCode} - ${member.farmerName}`)
+    setMemberOptions([])
+    fetchMemberBalance(member.id)
+  }
+
   const openModal = (type: "Deposit" | "Withdrawal") => {
     setModalType(type)
     setMemberSearch("")
     setSelectedMember(null)
+    setMemberBalance(null)
     setAmount("")
     setNarration("")
     setSubmitError("")
@@ -156,6 +187,11 @@ export default function TransactionsPage() {
     if (!selectedMember) { setSubmitError("Select a member"); return }
     const amt = parseFloat(amount)
     if (!amt || amt <= 0) { setSubmitError("Enter a valid amount"); return }
+
+    if (modalType === "Withdrawal" && memberBalance !== null && amt > memberBalance) {
+      setSubmitError(`Insufficient balance. Available: UGX ${memberBalance.toLocaleString()}`)
+      return
+    }
 
     setSubmitting(true)
     setSubmitError("")
@@ -388,8 +424,8 @@ export default function TransactionsPage() {
         size="md"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Member</label>
+          <div ref={dropdownRef}>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Member *</label>
             <div className="relative">
               <input
                 type="text"
@@ -397,35 +433,52 @@ export default function TransactionsPage() {
                 onChange={(e) => {
                   setMemberSearch(e.target.value)
                   setSelectedMember(null)
-                  setMemberDropdownOpen(true)
+                  setMemberBalance(null)
                 }}
-                onFocus={() => setMemberDropdownOpen(true)}
-                placeholder="Search member by name or code..."
+                onFocus={() => {
+                  if (memberSearch.length >= 2) searchMembers(memberSearch)
+                }}
+                placeholder="Type to search member by name or code..."
                 className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-white"
+                required
               />
-              {memberDropdownOpen && memberOptions.length > 0 && (
+              {memberOptions.length > 0 && (
                 <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
                   {memberOptions.map((m) => (
                     <button
                       key={m.id}
                       type="button"
-                      onClick={() => {
-                        setSelectedMember(m)
-                        setMemberSearch(`${m.memberCode} - ${m.farmerName}`)
-                        setMemberDropdownOpen(false)
-                      }}
-                      className="w-full px-3 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-sm"
+                      onClick={() => handleMemberSelect(m)}
+                      className="w-full px-3 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-sm flex items-center justify-between"
                     >
-                      <span className="font-mono text-xs text-gray-500">{m.memberCode}</span> - {m.farmerName}
+                      <div>
+                        <span className="font-mono text-xs text-gray-500 mr-2">{m.memberCode}</span>
+                        <span className="font-medium">{m.farmerName}</span>
+                      </div>
+                      {m.phoneNumber && (
+                        <span className="text-xs text-gray-400">{m.phoneNumber}</span>
+                      )}
                     </button>
                   ))}
                 </div>
               )}
             </div>
+            {selectedMember && (
+              <div className="mt-2 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                  Selected: {selectedMember.memberCode} - {selectedMember.farmerName}
+                </p>
+                {memberBalance !== null && (
+                  <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                    Current Balance: <span className="font-semibold">{formatUGX(memberBalance)}</span>
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           <Input
-            label="Amount (UGX)"
+            label={`Amount (UGX) ${modalType === "Withdrawal" && memberBalance !== null ? `- Available: ${formatUGX(memberBalance)}` : ""}`}
             type="number"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
@@ -446,14 +499,16 @@ export default function TransactionsPage() {
           </div>
 
           {submitError && (
-            <p className="text-sm text-red-600 dark:text-red-400">{submitError}</p>
+            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+              <p className="text-sm text-red-600 dark:text-red-400">{submitError}</p>
+            </div>
           )}
 
           <div className="flex justify-end gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
             <Button type="button" variant="ghost" onClick={() => setModalOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" loading={submitting}>
+            <Button type="submit" loading={submitting} disabled={!selectedMember}>
               {modalType === "Deposit" ? "Process Deposit" : "Process Withdrawal"}
             </Button>
           </div>

@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Search, Plus, TrendingUp, Users, DollarSign } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Search, Plus, TrendingUp, Users, DollarSign, ExternalLink } from "lucide-react"
 import PageHeader from "@/components/ui/PageHeader"
 import Table from "@/components/ui/Table"
 import Badge from "@/components/ui/Badge"
@@ -36,7 +37,7 @@ interface ShareTransaction {
   narration: string | null
   referenceNumber: string | null
   transactionDate: string
-  member: { farmerName: string; memberCode: string }
+  member: { id: number; farmerName: string; memberCode: string }
 }
 
 interface Summary {
@@ -67,6 +68,7 @@ const initialForm: FormData = {
 }
 
 export default function SharesPage() {
+  const router = useRouter()
   const [shareholders, setShareholders] = useState<Shareholder[]>([])
   const [transactions, setTransactions] = useState<ShareTransaction[]>([])
   const [summary, setSummary] = useState<Summary>({ totalSharesIssued: 0, totalValue: 0, shareholdersCount: 0, pricePerShare: 10000 })
@@ -177,10 +179,16 @@ export default function SharesPage() {
       render: (item: Record<string, unknown>) => {
         const s = item as unknown as Shareholder
         return (
-          <div>
-            <p className="font-medium text-gray-900 dark:text-white">{s.farmerName}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">{s.memberCode}</p>
-          </div>
+          <button
+            onClick={() => router.push(`/members/${s.id}/edit`)}
+            className="text-left hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg p-1 -m-1 transition-colors group"
+          >
+            <p className="font-medium text-gray-900 dark:text-white group-hover:text-[var(--color-primary)]">{s.farmerName}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+              {s.memberCode}
+              <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+            </p>
+          </button>
         )
       },
     },
@@ -213,12 +221,16 @@ export default function SharesPage() {
       key: "member",
       header: "Member",
       render: (item: Record<string, unknown>) => {
-        const m = item.member as { farmerName: string; memberCode: string }
+        const t = item as unknown as ShareTransaction
+        const m = t.member
         return (
-          <div>
-            <p className="font-medium text-gray-900 dark:text-white">{m.farmerName}</p>
+          <button
+            onClick={() => router.push(`/members/${t.memberId}/edit`)}
+            className="text-left hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg p-1 -m-1 transition-colors group"
+          >
+            <p className="font-medium text-gray-900 dark:text-white group-hover:text-[var(--color-primary)]">{m.farmerName}</p>
             <p className="text-xs text-gray-500 dark:text-gray-400">{m.memberCode}</p>
-          </div>
+          </button>
         )
       },
     },
