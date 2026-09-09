@@ -8,8 +8,16 @@ import Badge from "@/components/ui/Badge"
 import Button from "@/components/ui/Button"
 import Input from "@/components/ui/Input"
 import Select from "@/components/ui/Select"
+import Modal from "@/components/ui/Modal"
 import { MetricCard } from "@/components/ui/Card"
 import { formatUGX, formatDateTime } from "@/lib/utils"
+
+interface MemberOption {
+  id: number
+  memberCode: string
+  farmerName: string
+  phoneNumber: string | null
+}
 
 interface Transaction {
   id: number
@@ -73,6 +81,17 @@ export default function TransactionsPage() {
   const [dateTo, setDateTo] = useState("")
   const [showFilters, setShowFilters] = useState(false)
 
+  const [modalOpen, setModalOpen] = useState(false)
+  const [modalType, setModalType] = useState<"Deposit" | "Withdrawal">("Deposit")
+  const [memberSearch, setMemberSearch] = useState("")
+  const [memberOptions, setMemberOptions] = useState<MemberOption[]>([])
+  const [memberDropdownOpen, setMemberDropdownOpen] = useState(false)
+  const [selectedMember, setSelectedMember] = useState<MemberOption | null>(null)
+  const [amount, setAmount] = useState("")
+  const [narration, setNarration] = useState("")
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState("")
+
   const fetchTransactions = useCallback(async () => {
     setLoading(true)
     try {
@@ -105,6 +124,65 @@ export default function TransactionsPage() {
   useEffect(() => {
     fetchTransactions()
   }, [fetchTransactions])
+
+  const searchMembers = useCallback(async (query: string) => {
+    if (query.length < 2) { setMemberOptions([]); return }
+    try {
+      const res = await fetch(`/api/members?search=${encodeURIComponent(query)}&pageSize=10`)
+      if (res.ok) {
+        const data = await res.json()
+        setMemberOptions(data.data || [])
+      }
+    } catch { /* empty */ }
+  }, [])
+
+  useEffect(() => {
+    const timer = setTimeout(() => searchMembers(memberSearch), 300)
+    return () => clearTimeout(timer)
+  }, [memberSearch, searchMembers])
+
+  const openModal = (type: "Deposit" | "Withdrawal") => {
+    setModalType(type)
+    setMemberSearch("")
+    setSelectedMember(null)
+    setAmount("")
+    setNarration("")
+    setSubmitError("")
+    setModalOpen(true)
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedMember) { setSubmitError("Select a member"); return }
+    const amt = parseFloat(amount)
+    if (!amt || amt <= 0) { setSubmitError("Enter a valid amount"); return }
+
+    setSubmitting(true)
+    setSubmitError("")
+    try {
+      const res = await fetch("/api/savings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          memberId: selectedMember.id,
+          transactionType: modalType,
+          amount: amt,
+          narration: narration || `${modalType} from Transactions page`,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setSubmitError(data.error || "Failed")
+        return
+      }
+      setModalOpen(false)
+      fetchTransactions()
+    } catch {
+      setSubmitError("Network error")
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   const columns = [
     {
@@ -194,6 +272,16 @@ export default function TransactionsPage() {
       <PageHeader
         title="Transactions"
         subtitle="Unified view of all financial activity"
+        actions={
+          <div className="flex gap-2">
+            <Button icon={<ArrowDownCircle className="w-4 h-4" />} onClick={() => openModal("Deposit")}>
+              Deposit
+            </Button>
+            <Button variant="outline" icon={<ArrowUpCircle className="w-4 h-4" />} onClick={() => openModal("Withdrawal")}>
+              Withdraw
+            </Button>
+          </div>
+        }
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -292,6 +380,85 @@ export default function TransactionsPage() {
           emptyIcon={!loading ? <FileText className="w-12 h-12 mb-3 opacity-50" /> : undefined}
         />
       </div>
+
+      <Modal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={`${modalType} Funds`}
+        size="md"
+      >
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Member</label>
+            <div className="relative">
+              <input
+                type="text"
+                value={memberSearch}
+                onChange={(e) => {
+                  setMemberSearch(e.target.value)
+                  setSelectedMember(null)
+                  setMemberDropdownOpen(true)
+                }}
+                onFocus={() => setMemberDropdownOpen(true)}
+                placeholder="Search member by name or code..."
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-white"
+              />
+              {memberDropdownOpen && memberOptions.length > 0 && (
+                <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {memberOptions.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedMember(m)
+                        setMemberSearch(`${m.memberCode} - ${m.farmerName}`)
+                        setMemberDropdownOpen(false)
+                      }}
+                      className="w-full px-3 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 text-sm"
+                    >
+                      <span className="font-mono text-xs text-gray-500">{m.memberCode}</span> - {m.farmerName}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <Input
+            label="Amount (UGX)"
+            type="number"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="Enter amount"
+            min="1"
+            required
+          />
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Narration (optional)</label>
+            <textarea
+              value={narration}
+              onChange={(e) => setNarration(e.target.value)}
+              rows={2}
+              placeholder="Optional description..."
+              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-white"
+            />
+          </div>
+
+          {submitError && (
+            <p className="text-sm text-red-600 dark:text-red-400">{submitError}</p>
+          )}
+
+          <div className="flex justify-end gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <Button type="button" variant="ghost" onClick={() => setModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" loading={submitting}>
+              {modalType === "Deposit" ? "Process Deposit" : "Process Withdrawal"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 }

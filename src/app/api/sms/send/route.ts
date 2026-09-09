@@ -9,7 +9,7 @@ async function sendEgoSMS(
   const username = settings.sms_api_key || ""
   const password = settings.sms_api_secret || ""
   const senderId = settings.sms_sender_id || "KAFS"
-  const apiUrl = settings.sms_base_url || "https://comms.egosms.co/api/v1/plain/"
+  const apiUrl = settings.sms_base_url || "https://www.egosms.co/api/v1/plain/"
 
   if (!username || !password) {
     return { success: false, error: "EgoSMS credentials not configured. Go to Settings → SMS Gateway and enter your API key and secret." }
@@ -21,16 +21,13 @@ async function sendEgoSMS(
     const params = new URLSearchParams({
       username,
       password,
-      sender_id: senderId,
-      phone_number: formattedPhone,
+      sender: senderId,
+      number: formattedPhone,
       message,
     })
 
-    const response = await fetch(apiUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: params.toString(),
-    })
+    const url = `${apiUrl}?${params.toString()}`
+    const response = await fetch(url, { method: "GET" })
 
     const result = await response.text()
 
