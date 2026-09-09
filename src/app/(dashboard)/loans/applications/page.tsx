@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import {
   Search, Plus, Eye, FileText, ChevronLeft, ChevronRight, Check, User,
   DollarSign, Users, Shield, Heart, ClipboardCheck, UsersRound, Award, X, Download
@@ -183,6 +183,8 @@ export default function LoanApplicationsPage() {
   const [memberSearch, setMemberSearch] = useState("")
   const [memberOptions, setMemberOptions] = useState<MemberOption[]>([])
   const [memberDropdownOpen, setMemberDropdownOpen] = useState(false)
+  const memberInputRef = useRef<HTMLInputElement>(null)
+  const [memberDropdownPos, setMemberDropdownPos] = useState({ top: 0, left: 0, width: 0 })
 
   const [detailModalOpen, setDetailModalOpen] = useState(false)
   const [selectedApp, setSelectedApp] = useState<Application | null>(null)
@@ -282,6 +284,13 @@ export default function LoanApplicationsPage() {
     }))
     setMemberDropdownOpen(false)
     setMemberOptions([])
+  }
+
+  const updateDropdownPos = () => {
+    if (memberInputRef.current) {
+      const rect = memberInputRef.current.getBoundingClientRect()
+      setMemberDropdownPos({ top: rect.bottom + 4, left: rect.left, width: rect.width })
+    }
   }
 
   const updateWizard = <K extends keyof WizardData>(field: K, value: WizardData[K]) => {
@@ -546,6 +555,7 @@ export default function LoanApplicationsPage() {
           <div className="space-y-4">
             <div className="relative">
               <Input
+                ref={memberInputRef}
                 label="Member *"
                 value={wizardData.memberSearch}
                 onChange={(e) => {
@@ -553,12 +563,16 @@ export default function LoanApplicationsPage() {
                   updateWizard("memberId", "")
                   updateWizard("memberSearch", "")
                   setMemberDropdownOpen(true)
+                  updateDropdownPos()
                 }}
-                onFocus={() => setMemberDropdownOpen(true)}
+                onFocus={() => { setMemberDropdownOpen(true); updateDropdownPos() }}
                 placeholder="Search member by name or code..."
               />
               {memberDropdownOpen && memberOptions.length > 0 && (
-                <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                <div
+                  className="fixed z-[100] bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-48 overflow-y-auto"
+                  style={{ top: memberDropdownPos.top, left: memberDropdownPos.left, width: memberDropdownPos.width }}
+                >
                   {memberOptions.map((member) => (
                     <button
                       key={member.id}

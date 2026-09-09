@@ -63,6 +63,10 @@ function fill(template: string, vars: Record<string, string>): string {
   return msg
 }
 
+function now(): string {
+  return new Date().toLocaleString("en-UG", { timeZone: "Africa/Kampala", dateStyle: "medium", timeStyle: "short" })
+}
+
 async function sendToMember(
   templateKey: string,
   memberId: number,
@@ -116,6 +120,7 @@ export async function smsAccountOpening(memberId: number, accountNo: string, acc
     account_no: accountNo,
     account_type: accountType,
     amount: amount.toLocaleString(),
+    time: now(),
   }, "Account Opening")
 }
 
@@ -124,6 +129,7 @@ export async function smsSavingsDeposit(memberId: number, amount: number, balanc
     amount: amount.toLocaleString(),
     balance: balance.toLocaleString(),
     reference,
+    time: now(),
   }, "Savings Deposit")
 }
 
@@ -132,6 +138,7 @@ export async function smsSavingsWithdrawal(memberId: number, amount: number, bal
     amount: amount.toLocaleString(),
     balance: balance.toLocaleString(),
     reference,
+    time: now(),
   }, "Savings Withdrawal")
 }
 
@@ -141,6 +148,7 @@ export async function smsLoanDisbursement(memberId: number, loanCode: string, am
     amount: amount.toLocaleString(),
     installment: installment.toLocaleString(),
     due_date: dueDate,
+    time: now(),
   }, "Loan Disbursement")
 }
 
@@ -149,6 +157,7 @@ export async function smsLoanRepayment(memberId: number, amount: number, balance
     amount: amount.toLocaleString(),
     balance: balance.toLocaleString(),
     reference,
+    time: now(),
   }, "Loan Repayment")
 }
 
@@ -156,6 +165,7 @@ export async function smsLoanApproval(memberId: number, applicationCode: string,
   await sendToMember("loan_approval", memberId, {
     application_code: applicationCode,
     amount: amount.toLocaleString(),
+    time: now(),
   }, "Loan Approval")
 }
 
@@ -163,6 +173,7 @@ export async function smsLoanRejection(memberId: number, applicationCode: string
   await sendToMember("loan_rejection", memberId, {
     application_code: applicationCode,
     amount: amount.toLocaleString(),
+    time: now(),
   }, "Loan Rejection")
 }
 
@@ -172,6 +183,7 @@ export async function smsSharePurchase(memberId: number, shares: number, price: 
     price: price.toLocaleString(),
     amount: amount.toLocaleString(),
     reference,
+    time: now(),
   }, "Share Purchase")
 }
 
@@ -181,5 +193,6 @@ export async function smsFixedDeposit(memberId: number, amount: number, period: 
     period: String(period),
     maturity_date: maturityDate,
     interest: interest.toLocaleString(),
+    time: now(),
   }, "Fixed Deposit")
 }
