@@ -14,6 +14,7 @@ import {
   LogOut,
   User,
   ChevronDown,
+  Key,
 } from 'lucide-react'
 import { signOut } from 'next-auth/react'
 
@@ -41,6 +42,13 @@ export default function Header({ onMenuClick }: HeaderProps) {
   const { theme, toggleTheme } = useTheme()
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [notifCount, setNotifCount] = useState(0)
+  const [showChangePassword, setShowChangePassword] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [passwordError, setPasswordError] = useState("")
+  const [passwordSuccess, setPasswordSuccess] = useState("")
+  const [changingPassword, setChangingPassword] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   const user = session?.user
@@ -73,6 +81,45 @@ export default function Header({ onMenuClick }: HeaderProps) {
         .catch(() => {})
     }
   }, [session])
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setPasswordError("")
+    setPasswordSuccess("")
+    if (newPassword.length < 6) {
+      setPasswordError("New password must be at least 6 characters")
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("Passwords do not match")
+      return
+    }
+    setChangingPassword(true)
+    try {
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setPasswordError(data.error || "Failed to change password")
+        return
+      }
+      setPasswordSuccess("Password changed successfully!")
+      setCurrentPassword("")
+      setNewPassword("")
+      setConfirmPassword("")
+      setTimeout(() => {
+        setShowChangePassword(false)
+        setPasswordSuccess("")
+      }, 2000)
+    } catch {
+      setPasswordError("Failed to change password")
+    } finally {
+      setChangingPassword(false)
+    }
+  }
 
   return (
     <header className="sticky top-0 z-30 h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center px-4 lg:px-6">
@@ -169,6 +216,16 @@ export default function Header({ onMenuClick }: HeaderProps) {
                 <span>Profile</span>
               </button>
               <button
+                onClick={() => {
+                  setDropdownOpen(false)
+                  setShowChangePassword(true)
+                }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                <Key className="w-4 h-4" />
+                <span>Change Password</span>
+              </button>
+              <button
                 onClick={() => signOut({ callbackUrl: '/login' })}
                 className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
               >
@@ -179,6 +236,91 @@ export default function Header({ onMenuClick }: HeaderProps) {
           )}
         </div>
       </div>
+
+      {showChangePassword && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50" onClick={() => setShowChangePassword(false)}>
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 w-full max-w-md p-6 mx-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-lg bg-[var(--color-primary)]/10 flex items-center justify-center">
+                <Key className="w-5 h-5 text-[var(--color-primary)]" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Change Password</h2>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Update your account password</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleChangePassword} className="space-y-4">
+              {passwordError && (
+                <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                  <p className="text-sm text-red-600 dark:text-red-400">{passwordError}</p>
+                </div>
+              )}
+              {passwordSuccess && (
+                <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                  <p className="text-sm text-green-600 dark:text-green-400">{passwordSuccess}</p>
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Current Password</label>
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/50 focus:border-[var(--color-primary)]"
+                  placeholder="Enter current password"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">New Password</label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/50 focus:border-[var(--color-primary)]"
+                  placeholder="Minimum 6 characters"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Confirm New Password</label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/50 focus:border-[var(--color-primary)]"
+                  placeholder="Re-enter new password"
+                  required
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowChangePassword(false)
+                    setPasswordError("")
+                    setPasswordSuccess("")
+                    setCurrentPassword("")
+                    setNewPassword("")
+                    setConfirmPassword("")
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={changingPassword}
+                  className="px-4 py-2 text-sm font-medium text-white bg-[var(--color-primary)] hover:bg-[var(--color-primary-dark)] rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {changingPassword ? "Changing..." : "Change Password"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </header>
   )
 }
