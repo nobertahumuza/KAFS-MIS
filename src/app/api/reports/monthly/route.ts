@@ -53,7 +53,7 @@ export async function POST() {
 
     const result = await sendReportEmail(`KAFS SACCO ${monthName} Monthly Report`, html)
 
-    return NextResponse.json({ success: result.success, messageId: result.messageId })
+    return NextResponse.json(result)
   } catch (error) {
     console.error("Monthly report error:", error)
     return NextResponse.json({ success: false, error: String(error) }, { status: 500 })
