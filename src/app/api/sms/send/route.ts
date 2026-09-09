@@ -31,7 +31,14 @@ async function sendEgoSMS(
 
     const result = await response.text()
 
-    if (response.ok) {
+    const isError = result.toLowerCase().includes("error") ||
+      result.toLowerCase().includes("not exist") ||
+      result.toLowerCase().includes("not active") ||
+      result.toLowerCase().includes("invalid") ||
+      result.toLowerCase().includes("failed") ||
+      result.includes("<!doctype")
+
+    if (!isError && response.ok) {
       return { success: true, providerMsgId: result }
     }
 

@@ -30,7 +30,7 @@ export default function ErrorPage({
           </button>
         </div>
         <p className="text-center text-gray-400 text-sm mt-6">
-          Designed by NobTechWorld | 0760 399 849
+          Designed by NobTechWorld | WhatsApp: +256 760 399 849
         </p>
       </div>
     </div>

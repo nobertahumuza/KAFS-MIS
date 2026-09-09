@@ -25,7 +25,19 @@ async function sendEgoSMS(
     const url = `${apiUrl}?${params.toString()}`
     const response = await fetch(url, { method: "GET" })
     const result = await response.text()
-    return response.ok ? { success: true, providerMsgId: result } : { success: false, error: result }
+
+    const isError = result.toLowerCase().includes("error") ||
+      result.toLowerCase().includes("not exist") ||
+      result.toLowerCase().includes("not active") ||
+      result.toLowerCase().includes("invalid") ||
+      result.toLowerCase().includes("failed") ||
+      result.includes("<!doctype")
+
+    if (isError) {
+      return { success: false, error: result }
+    }
+
+    return { success: true, providerMsgId: result }
   } catch (err) {
     return { success: false, error: `Network error: ${err instanceof Error ? err.message : "Unknown"}` }
   }
