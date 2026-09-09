@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession } from 'next-auth/react'
@@ -69,6 +69,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
   const { data: session } = useSession()
   const { theme, toggleTheme } = useTheme()
   const [collapsed, setCollapsed] = useState(false)
+  const [notificationCount, setNotificationCount] = useState(0)
 
   const userRole = session?.user?.role
   const user = session?.user
@@ -78,7 +79,14 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
     return (item.roles as readonly string[]).includes(userRole)
   })
 
-  const notificationCount = 0
+  useEffect(() => {
+    if (session) {
+      fetch("/api/notifications?filter=unread")
+        .then((res) => res.json())
+        .then((d) => setNotificationCount(d.unreadCount || 0))
+        .catch(() => {})
+    }
+  }, [session])
 
   return (
     <>

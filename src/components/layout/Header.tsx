@@ -40,6 +40,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
   const { data: session } = useSession()
   const { theme, toggleTheme } = useTheme()
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [notifCount, setNotifCount] = useState(0)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   const user = session?.user
@@ -63,6 +64,15 @@ export default function Header({ onMenuClick }: HeaderProps) {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  useEffect(() => {
+    if (session) {
+      fetch("/api/notifications?filter=unread")
+        .then((res) => res.json())
+        .then((d) => setNotifCount(d.unreadCount || 0))
+        .catch(() => {})
+    }
+  }, [session])
 
   return (
     <header className="sticky top-0 z-30 h-16 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center px-4 lg:px-6">
@@ -105,9 +115,16 @@ export default function Header({ onMenuClick }: HeaderProps) {
           )}
         </button>
 
-        <button className="relative flex items-center justify-center w-10 h-10 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+        <button
+          onClick={() => router.push('/notifications')}
+          className="relative flex items-center justify-center w-10 h-10 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+        >
           <Bell className="w-5 h-5 text-gray-600 dark:text-gray-300" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full" />
+          {notifCount > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+              {notifCount > 99 ? "99+" : notifCount}
+            </span>
+          )}
         </button>
 
         <div className="relative" ref={dropdownRef}>

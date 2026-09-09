@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Save } from "lucide-react"
+import { ArrowLeft, Save, Hash } from "lucide-react"
 import PageHeader from "@/components/ui/PageHeader"
 import Input from "@/components/ui/Input"
 import Select from "@/components/ui/Select"
@@ -15,9 +15,13 @@ interface FormData {
   gender: string
   nin: string
   address: string
+  village: string
   parish: string
+  sub_county: string
   district: string
   occupation: string
+  id_document_type: string
+  id_document_number: string
   next_of_kin_name: string
   next_of_kin_phone: string
 }
@@ -29,9 +33,13 @@ const initialFormData: FormData = {
   gender: "Male",
   nin: "",
   address: "",
+  village: "",
   parish: "",
+  sub_county: "",
   district: "",
   occupation: "",
+  id_document_type: "National ID",
+  id_document_number: "",
   next_of_kin_name: "",
   next_of_kin_phone: "",
 }
@@ -42,6 +50,14 @@ export default function RegisterMemberPage() {
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({})
   const [loading, setLoading] = useState(false)
   const [serverError, setServerError] = useState("")
+  const [nextCode, setNextCode] = useState("Loading...")
+
+  useEffect(() => {
+    fetch("/api/members/next-code")
+      .then((res) => res.json())
+      .then((d) => setNextCode(d.code || "KAFS-001"))
+      .catch(() => setNextCode("KAFS-001"))
+  }, [])
 
   const handleChange = (field: keyof FormData) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -81,9 +97,13 @@ export default function RegisterMemberPage() {
           gender: form.gender,
           ninNumber: form.nin.trim() || null,
           address: form.address.trim() || null,
+          village: form.village.trim() || null,
           parish: form.parish.trim() || null,
+          subCounty: form.sub_county.trim() || null,
           district: form.district.trim() || null,
           occupation: form.occupation.trim() || null,
+          idDocumentType: form.id_document_type || null,
+          idDocumentNumber: form.id_document_number.trim() || null,
           nextOfKinName: form.next_of_kin_name.trim() || null,
           nextOfKinPhone: form.next_of_kin_phone.trim() || null,
         }),
@@ -103,7 +123,7 @@ export default function RegisterMemberPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-6 max-w-4xl">
       <PageHeader
         title="Register New Member"
         subtitle="Fill in the member details below"
@@ -121,6 +141,15 @@ export default function RegisterMemberPage() {
               <p className="text-sm text-red-600 dark:text-red-400">{serverError}</p>
             </div>
           )}
+
+          {/* Auto-generated Member Code */}
+          <div className="flex items-center gap-3 p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+            <Hash className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+            <div>
+              <p className="text-xs text-blue-600 dark:text-blue-400 font-medium uppercase tracking-wider">Member Code (Auto-generated)</p>
+              <p className="text-lg font-bold text-blue-800 dark:text-blue-200">{nextCode}</p>
+            </div>
+          </div>
 
           <div>
             <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 uppercase tracking-wider">Personal Information</h3>
@@ -166,7 +195,25 @@ export default function RegisterMemberPage() {
                 label="Occupation"
                 value={form.occupation}
                 onChange={handleChange("occupation")}
-                placeholder="e.g. Farmer, Teacher"
+                placeholder="e.g. Farming, Trading"
+              />
+              <Select
+                label="ID Document Type"
+                value={form.id_document_type}
+                onChange={handleChange("id_document_type")}
+                options={[
+                  { value: "National ID", label: "National ID" },
+                  { value: "Passport", label: "Passport" },
+                  { value: "Driving Permit", label: "Driving Permit" },
+                  { value: "Voter Card", label: "Voter Card" },
+                  { value: "Student ID", label: "Student ID" },
+                ]}
+              />
+              <Input
+                label="ID Document Number"
+                value={form.id_document_number}
+                onChange={handleChange("id_document_number")}
+                placeholder="Document number"
               />
             </div>
           </div>
@@ -178,13 +225,25 @@ export default function RegisterMemberPage() {
                 label="Address"
                 value={form.address}
                 onChange={handleChange("address")}
-                placeholder="Village/Street"
+                placeholder="P.O. Box / Street address"
+              />
+              <Input
+                label="Village"
+                value={form.village}
+                onChange={handleChange("village")}
+                placeholder="Enter village"
               />
               <Input
                 label="Parish"
                 value={form.parish}
                 onChange={handleChange("parish")}
                 placeholder="Enter parish"
+              />
+              <Input
+                label="Sub-county"
+                value={form.sub_county}
+                onChange={handleChange("sub_county")}
+                placeholder="Enter sub-county"
               />
               <Input
                 label="District"

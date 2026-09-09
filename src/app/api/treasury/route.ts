@@ -42,25 +42,30 @@ export async function GET() {
 
     const totalCash = (totalSavings._sum.amount || 0) - (totalLoans._sum.principalAmount || 0)
 
-    const income = savingsByType
+    const incomeByCategory = savingsByType
       .filter((s) => s.transactionType === "Deposit")
-      .reduce((sum, s) => sum + (s._sum.amount || 0), 0)
+      .map((s) => ({
+        category: "Savings Deposits",
+        amount: s._sum.amount || 0,
+      }))
 
-    const expenses = expensesByCategory.map((e) => ({
+    const expenseByCategory = expensesByCategory.map((e) => ({
       category: e.category,
       amount: e._sum.amount || 0,
     }))
 
-    const recentLargeTransactions = [
-      ...largeSavings.map((s) => ({
-        type: "Savings",
+    const largeTransactions = [
+      ...largeSavings.map((s, i) => ({
+        id: i + 1,
+        type: "Savings" as const,
         member: s.member.farmerName,
         amount: s.amount,
         date: s.transactionDate.toISOString(),
         description: s.narration || "Savings transaction",
       })),
-      ...largeLoans.map((l) => ({
-        type: "Loan",
+      ...largeLoans.map((l, i) => ({
+        id: i + 1000 + 1,
+        type: "Loan" as const,
         member: l.member.farmerName,
         amount: l.principalAmount,
         date: l.disbursementDate.toISOString(),
@@ -78,10 +83,9 @@ export async function GET() {
       outstandingBalance: activeLoans._sum.currentBalance || 0,
       totalShares: totalShares._sum.totalAmount || 0,
       totalExpensesThisMonth: totalExpensesThisMonth._sum.amount || 0,
-      income,
-      expenses,
-      netPosition: income - (totalExpensesThisMonth._sum.amount || 0),
-      recentLargeTransactions,
+      incomeByCategory,
+      expenseByCategory,
+      largeTransactions,
     })
   } catch (error) {
     console.error("Treasury API error:", error)
@@ -94,10 +98,9 @@ export async function GET() {
         outstandingBalance: 0,
         totalShares: 0,
         totalExpensesThisMonth: 0,
-        income: 0,
-        expenses: [],
-        netPosition: 0,
-        recentLargeTransactions: [],
+        incomeByCategory: [],
+        expenseByCategory: [],
+        largeTransactions: [],
       },
       { status: 200 }
     )
