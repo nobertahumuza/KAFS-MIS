@@ -9,19 +9,22 @@ import Button from "@/components/ui/Button"
 import { formatUGX } from "@/lib/utils"
 
 interface TrendsData {
-  memberGrowth: Array<{ month: string; count: number; cumulative: number }>
-  savingsGrowth: Array<{ month: string; amount: number; cumulative: number }>
-  loanPortfolio: Array<{ month: string; disbursed: number; repaid: number; outstanding: number }>
-  delinquencyRate: Array<{ month: string; rate: number; count: number }>
-  summary: {
-    totalMembers: number
-    memberGrowthRate: number
-    totalSavings: number
-    savingsGrowthRate: number
-    loanOutstanding: number
-    loanGrowthRate: number
-    currentDelinquencyRate: number
-    delinquencyTrend: number
+  period: { from: string; to: string }
+  memberGrowth: {
+    data: Array<{ month: string; newMembers: number; totalMembers: number }>
+    summary: { totalNewMembers: number; avgMonthlyGrowth: number }
+  }
+  savingsGrowth: {
+    data: Array<{ month: string; deposits: number; withdrawals: number; netGrowth: number; cumulativeBalance: number }>
+    summary: { totalDeposits: number; totalWithdrawals: number; netGrowth: number }
+  }
+  loanPortfolio: {
+    data: Array<{ month: string; disbursements: number; repayments: number; activeLoans: number }>
+    summary: { totalDisbursements: number; totalRepayments: number; currentOutstandingBalance: number }
+  }
+  delinquencyRate: {
+    data: Array<{ month: string; totalActiveLoans: number; overdueLoans: number; overdueAmount: number; delinquencyRate: number }>
+    summary: { currentDelinquencyRate: number; averageRate: number }
   }
 }
 
@@ -74,12 +77,12 @@ export default function TrendsPage() {
     )
   }
 
-  const maxMemberCount = Math.max(...data.memberGrowth.map((m) => m.count), 1)
-  const maxMemberCumulative = Math.max(...data.memberGrowth.map((m) => m.cumulative), 1)
-  const maxSavingsAmount = Math.max(...data.savingsGrowth.map((m) => m.amount), 1)
-  const maxSavingsCumulative = Math.max(...data.savingsGrowth.map((m) => m.cumulative), 1)
-  const maxLoanDisbursed = Math.max(...data.loanPortfolio.flatMap((m) => [m.disbursed, m.repaid, m.outstanding]), 1)
-  const maxDelinquencyRate = Math.max(...data.delinquencyRate.map((m) => m.rate), 1)
+  const maxMemberCount = Math.max(...data.memberGrowth.data.map((m) => m.newMembers), 1)
+  const maxMemberCumulative = Math.max(...data.memberGrowth.data.map((m) => m.totalMembers), 1)
+  const maxSavingsAmount = Math.max(...data.savingsGrowth.data.map((m) => m.deposits), 1)
+  const maxSavingsCumulative = Math.max(...data.savingsGrowth.data.map((m) => m.cumulativeBalance), 1)
+  const maxLoanDisbursed = Math.max(...data.loanPortfolio.data.flatMap((m) => [m.disbursements, m.repayments]), 1)
+  const maxDelinquencyRate = Math.max(...data.delinquencyRate.data.map((m) => m.delinquencyRate), 1)
 
   return (
     <div className="space-y-6">
@@ -101,27 +104,27 @@ export default function TrendsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           label="Total Members"
-          value={data.summary.totalMembers}
+          value={data.memberGrowth.summary.totalNewMembers}
           icon={<Users className="w-5 h-5" />}
-          trend={{ value: data.summary.memberGrowthRate, isPositive: data.summary.memberGrowthRate >= 0 }}
+          trend={{ value: data.memberGrowth.summary.avgMonthlyGrowth, isPositive: true }}
         />
         <MetricCard
           label="Total Savings"
-          value={formatUGX(data.summary.totalSavings)}
+          value={formatUGX(data.savingsGrowth.summary.netGrowth)}
           icon={<PiggyBank className="w-5 h-5" />}
-          trend={{ value: data.summary.savingsGrowthRate, isPositive: data.summary.savingsGrowthRate >= 0 }}
+          trend={{ value: data.savingsGrowth.summary.totalDeposits, isPositive: true }}
         />
         <MetricCard
           label="Loan Outstanding"
-          value={formatUGX(data.summary.loanOutstanding)}
+          value={formatUGX(data.loanPortfolio.summary.currentOutstandingBalance)}
           icon={<CreditCard className="w-5 h-5" />}
-          trend={{ value: data.summary.loanGrowthRate, isPositive: data.summary.loanGrowthRate >= 0 }}
+          trend={{ value: data.loanPortfolio.summary.totalDisbursements, isPositive: true }}
         />
         <MetricCard
           label="Delinquency Rate"
-          value={`${data.summary.currentDelinquencyRate.toFixed(1)}%`}
+          value={`${data.delinquencyRate.summary.currentDelinquencyRate.toFixed(1)}%`}
           icon={<AlertTriangle className="w-5 h-5" />}
-          trend={{ value: data.summary.delinquencyTrend, isPositive: data.summary.delinquencyTrend <= 0 }}
+          trend={{ value: data.delinquencyRate.summary.averageRate, isPositive: data.delinquencyRate.summary.averageRate <= 0 }}
         />
       </div>
 
@@ -139,20 +142,20 @@ export default function TrendsPage() {
             </div>
           </div>
         </div>
-        {data.memberGrowth.length > 0 ? (
+        {data.memberGrowth.data.length > 0 ? (
           <div className="flex items-end gap-3 h-56">
-            {data.memberGrowth.map((month) => (
+            {data.memberGrowth.data.map((month) => (
               <div key={month.month} className="flex-1 flex flex-col items-center gap-2">
                 <div className="w-full flex items-end gap-1 h-48">
                   <div
                     className="flex-1 bg-blue-500 rounded-t-sm transition-all duration-300 hover:bg-blue-600"
-                    style={{ height: `${(month.count / maxMemberCount) * 100}%`, minHeight: month.count > 0 ? "4px" : "0px" }}
-                    title={`New members: ${month.count}`}
+                    style={{ height: `${(month.newMembers / maxMemberCount) * 100}%`, minHeight: month.newMembers > 0 ? "4px" : "0px" }}
+                    title={`New members: ${month.newMembers}`}
                   />
                   <div
                     className="flex-1 bg-blue-300 dark:bg-blue-600 rounded-t-sm transition-all duration-300"
-                    style={{ height: `${(month.cumulative / maxMemberCumulative) * 100}%`, minHeight: month.cumulative > 0 ? "4px" : "0px" }}
-                    title={`Cumulative: ${month.cumulative}`}
+                    style={{ height: `${(month.totalMembers / maxMemberCumulative) * 100}%`, minHeight: month.totalMembers > 0 ? "4px" : "0px" }}
+                    title={`Cumulative: ${month.totalMembers}`}
                   />
                 </div>
                 <span className="text-[10px] text-gray-500 dark:text-gray-400 truncate w-full text-center">{month.month}</span>
@@ -178,20 +181,20 @@ export default function TrendsPage() {
             </div>
           </div>
         </div>
-        {data.savingsGrowth.length > 0 ? (
+        {data.savingsGrowth.data.length > 0 ? (
           <div className="flex items-end gap-3 h-56">
-            {data.savingsGrowth.map((month) => (
+            {data.savingsGrowth.data.map((month) => (
               <div key={month.month} className="flex-1 flex flex-col items-center gap-2">
                 <div className="w-full flex items-end gap-1 h-48">
                   <div
                     className="flex-1 bg-green-500 rounded-t-sm transition-all duration-300 hover:bg-green-600"
-                    style={{ height: `${(month.amount / maxSavingsAmount) * 100}%`, minHeight: month.amount > 0 ? "4px" : "0px" }}
-                    title={`Monthly: ${formatUGX(month.amount)}`}
+                    style={{ height: `${(month.deposits / maxSavingsAmount) * 100}%`, minHeight: month.deposits > 0 ? "4px" : "0px" }}
+                    title={`Monthly: ${formatUGX(month.deposits)}`}
                   />
                   <div
                     className="flex-1 bg-green-300 dark:bg-green-600 rounded-t-sm transition-all duration-300"
-                    style={{ height: `${(month.cumulative / maxSavingsCumulative) * 100}%`, minHeight: month.cumulative > 0 ? "4px" : "0px" }}
-                    title={`Cumulative: ${formatUGX(month.cumulative)}`}
+                    style={{ height: `${(month.cumulativeBalance / maxSavingsCumulative) * 100}%`, minHeight: month.cumulativeBalance > 0 ? "4px" : "0px" }}
+                    title={`Cumulative: ${formatUGX(month.cumulativeBalance)}`}
                   />
                 </div>
                 <span className="text-[10px] text-gray-500 dark:text-gray-400 truncate w-full text-center">{month.month}</span>
@@ -221,25 +224,20 @@ export default function TrendsPage() {
             </div>
           </div>
         </div>
-        {data.loanPortfolio.length > 0 ? (
+        {data.loanPortfolio.data.length > 0 ? (
           <div className="flex items-end gap-3 h-56">
-            {data.loanPortfolio.map((month) => (
+            {data.loanPortfolio.data.map((month) => (
               <div key={month.month} className="flex-1 flex flex-col items-center gap-2">
                 <div className="w-full flex items-end gap-0.5 h-48">
                   <div
                     className="flex-1 bg-purple-500 rounded-t-sm transition-all duration-300 hover:bg-purple-600"
-                    style={{ height: `${(month.disbursed / maxLoanDisbursed) * 100}%`, minHeight: month.disbursed > 0 ? "3px" : "0px" }}
-                    title={`Disbursed: ${formatUGX(month.disbursed)}`}
+                    style={{ height: `${(month.disbursements / maxLoanDisbursed) * 100}%`, minHeight: month.disbursements > 0 ? "3px" : "0px" }}
+                    title={`Disbursed: ${formatUGX(month.disbursements)}`}
                   />
                   <div
                     className="flex-1 bg-green-500 rounded-t-sm transition-all duration-300 hover:bg-green-600"
-                    style={{ height: `${(month.repaid / maxLoanDisbursed) * 100}%`, minHeight: month.repaid > 0 ? "3px" : "0px" }}
-                    title={`Repaid: ${formatUGX(month.repaid)}`}
-                  />
-                  <div
-                    className="flex-1 bg-orange-500 rounded-t-sm transition-all duration-300 hover:bg-orange-600"
-                    style={{ height: `${(month.outstanding / maxLoanDisbursed) * 100}%`, minHeight: month.outstanding > 0 ? "3px" : "0px" }}
-                    title={`Outstanding: ${formatUGX(month.outstanding)}`}
+                    style={{ height: `${(month.repayments / maxLoanDisbursed) * 100}%`, minHeight: month.repayments > 0 ? "3px" : "0px" }}
+                    title={`Repaid: ${formatUGX(month.repayments)}`}
                   />
                 </div>
                 <span className="text-[10px] text-gray-500 dark:text-gray-400 truncate w-full text-center">{month.month}</span>
@@ -254,23 +252,23 @@ export default function TrendsPage() {
       <Card className="p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Delinquency Rate Trend</h2>
-          <Badge variant={data.summary.currentDelinquencyRate > 10 ? "danger" : data.summary.currentDelinquencyRate > 5 ? "warning" : "success"}>
-            {data.summary.currentDelinquencyRate.toFixed(1)}% current
+          <Badge variant={data.delinquencyRate.summary.currentDelinquencyRate > 10 ? "danger" : data.delinquencyRate.summary.currentDelinquencyRate > 5 ? "warning" : "success"}>
+            {data.delinquencyRate.summary.currentDelinquencyRate.toFixed(1)}% current
           </Badge>
         </div>
-        {data.delinquencyRate.length > 0 ? (
+        {data.delinquencyRate.data.length > 0 ? (
           <div className="flex items-end gap-3 h-56">
-            {data.delinquencyRate.map((month) => (
+            {data.delinquencyRate.data.map((month) => (
               <div key={month.month} className="flex-1 flex flex-col items-center gap-2">
                 <div className="w-full flex items-end h-48">
                   <div
                     className={`w-full rounded-t-sm transition-all duration-300 ${
-                      month.rate > 10 ? "bg-red-500 hover:bg-red-600" :
-                      month.rate > 5 ? "bg-amber-500 hover:bg-amber-600" :
+                      month.delinquencyRate > 10 ? "bg-red-500 hover:bg-red-600" :
+                      month.delinquencyRate > 5 ? "bg-amber-500 hover:bg-amber-600" :
                       "bg-green-500 hover:bg-green-600"
                     }`}
-                    style={{ height: `${(month.rate / maxDelinquencyRate) * 100}%`, minHeight: month.rate > 0 ? "4px" : "0px" }}
-                    title={`Rate: ${month.rate.toFixed(1)}% (${month.count} loans)`}
+                    style={{ height: `${(month.delinquencyRate / maxDelinquencyRate) * 100}%`, minHeight: month.delinquencyRate > 0 ? "4px" : "0px" }}
+                    title={`Rate: ${month.delinquencyRate.toFixed(1)}% (${month.overdueLoans} loans)`}
                   />
                 </div>
                 <span className="text-[10px] text-gray-500 dark:text-gray-400 truncate w-full text-center">{month.month}</span>
@@ -297,20 +295,20 @@ export default function TrendsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-              {data.memberGrowth.map((m, i) => {
-                const savings = data.savingsGrowth[i]
-                const loan = data.loanPortfolio[i]
-                const delinq = data.delinquencyRate[i]
+              {data.memberGrowth.data.map((m, i) => {
+                const savings = data.savingsGrowth.data[i]
+                const loan = data.loanPortfolio.data[i]
+                const delinq = data.delinquencyRate.data[i]
                 return (
                   <tr key={m.month} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                     <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{m.month}</td>
-                    <td className="px-4 py-3 text-sm text-right text-blue-600 dark:text-blue-400 font-semibold">{m.count}</td>
-                    <td className="px-4 py-3 text-sm text-right text-green-600 dark:text-green-400 font-semibold">{formatUGX(savings?.amount || 0)}</td>
-                    <td className="px-4 py-3 text-sm text-right text-purple-600 dark:text-purple-400">{formatUGX(loan?.disbursed || 0)}</td>
-                    <td className="px-4 py-3 text-sm text-right text-green-600 dark:text-green-400">{formatUGX(loan?.repaid || 0)}</td>
+                    <td className="px-4 py-3 text-sm text-right text-blue-600 dark:text-blue-400 font-semibold">{m.newMembers}</td>
+                    <td className="px-4 py-3 text-sm text-right text-green-600 dark:text-green-400 font-semibold">{formatUGX(savings?.deposits || 0)}</td>
+                    <td className="px-4 py-3 text-sm text-right text-purple-600 dark:text-purple-400">{formatUGX(loan?.disbursements || 0)}</td>
+                    <td className="px-4 py-3 text-sm text-right text-green-600 dark:text-green-400">{formatUGX(loan?.repayments || 0)}</td>
                     <td className="px-4 py-3 text-sm text-right">
-                      <span className={`font-semibold ${(delinq?.rate || 0) > 10 ? "text-red-600" : (delinq?.rate || 0) > 5 ? "text-amber-600" : "text-green-600"}`}>
-                        {(delinq?.rate || 0).toFixed(1)}%
+                      <span className={`font-semibold ${(delinq?.delinquencyRate || 0) > 10 ? "text-red-600" : (delinq?.delinquencyRate || 0) > 5 ? "text-amber-600" : "text-green-600"}`}>
+                        {(delinq?.delinquencyRate || 0).toFixed(1)}%
                       </span>
                     </td>
                   </tr>

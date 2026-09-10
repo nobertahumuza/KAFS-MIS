@@ -15,22 +15,25 @@ import { formatUGX } from "@/lib/utils"
 interface BudgetItem {
   id: number
   category: string
-  budgeted: number
-  actual: number
+  budgetedAmount: number
+  actualSpent: number
   variance: number
-  variancePercent: number
-  fiscalYear: string
+  utilizationRate: number
+  transactionCount: number
+  notes: string | null
+  createdBy: string | null
+  createdAt: string
 }
 
 interface BudgetData {
-  items: BudgetItem[]
-  fiscalYears: string[]
-  currentFiscalYear: string
+  fiscalYear: number
+  budgets: BudgetItem[]
   summary: {
     totalBudgeted: number
-    totalActual: number
-    totalVariance: number
-    utilizationPercent: number
+    totalSpent: number
+    variance: number
+    overallUtilization: number
+    totalCategories: number
   }
 }
 
@@ -54,8 +57,8 @@ export default function BudgetPage() {
       if (res.ok) {
         const d = await res.json()
         setData(d)
-        if (!fiscalYear && d.currentFiscalYear) {
-          setFiscalYear(d.currentFiscalYear)
+        if (!fiscalYear && d.fiscalYear) {
+          setFiscalYear(String(d.fiscalYear))
         }
       }
     } catch {
@@ -74,7 +77,7 @@ export default function BudgetPage() {
     if (item) {
       setEditingItem(item)
       setFormCategory(item.category)
-      setFormBudgeted(String(item.budgeted))
+      setFormBudgeted(String(item.budgetedAmount))
     } else {
       setEditingItem(null)
       setFormCategory("")
@@ -96,8 +99,8 @@ export default function BudgetPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           category: formCategory,
-          budgeted: Number(formBudgeted),
-          fiscalYear: fiscalYear || data?.currentFiscalYear,
+          amount: Number(formBudgeted),
+          fiscalYear: fiscalYear || data?.fiscalYear,
         }),
       })
       if (res.ok) {
@@ -123,19 +126,19 @@ export default function BudgetPage() {
       ),
     },
     {
-      key: "budgeted",
+      key: "budgetedAmount",
       header: "Budgeted",
       className: "text-right",
       render: (item: Record<string, unknown>) => (
-        <span className="font-semibold">{formatUGX(item.budgeted as number)}</span>
+        <span className="font-semibold">{formatUGX(item.budgetedAmount as number)}</span>
       ),
     },
     {
-      key: "actual",
+      key: "actualSpent",
       header: "Actual",
       className: "text-right",
       render: (item: Record<string, unknown>) => (
-        <span className="font-semibold">{formatUGX(item.actual as number)}</span>
+        <span className="font-semibold">{formatUGX(item.actualSpent as number)}</span>
       ),
     },
     {
@@ -156,9 +159,9 @@ export default function BudgetPage() {
       header: "Utilization",
       className: "w-48",
       render: (item: Record<string, unknown>) => {
-        const budgeted = item.budgeted as number
-        const actual = item.actual as number
-        const percent = budgeted > 0 ? Math.min((actual / budgeted) * 100, 100) : 0
+        const budgetedAmount = item.budgetedAmount as number
+        const actualSpent = item.actualSpent as number
+        const percent = budgetedAmount > 0 ? Math.min((actualSpent / budgetedAmount) * 100, 100) : 0
         return (
           <div className="flex items-center gap-2">
             <div className="flex-1 h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
@@ -180,9 +183,9 @@ export default function BudgetPage() {
       key: "status",
       header: "Status",
       render: (item: Record<string, unknown>) => {
-        const budgeted = item.budgeted as number
-        const actual = item.actual as number
-        const percent = budgeted > 0 ? (actual / budgeted) * 100 : 0
+        const budgetedAmount = item.budgetedAmount as number
+        const actualSpent = item.actualSpent as number
+        const percent = budgetedAmount > 0 ? (actualSpent / budgetedAmount) * 100 : 0
         return (
           <Badge variant={percent > 100 ? "danger" : percent > 80 ? "warning" : "success"}>
             {percent > 100 ? "Over Budget" : percent > 80 ? "Near Limit" : "On Track"}
@@ -233,7 +236,7 @@ export default function BudgetPage() {
     )
   }
 
-  const fiscalYearOptions = data.fiscalYears.map((fy) => ({ value: fy, label: fy }))
+  const fiscalYearOptions = [{ value: String(data.fiscalYear), label: String(data.fiscalYear) }]
 
   return (
     <div className="space-y-6">
@@ -278,42 +281,42 @@ export default function BudgetPage() {
         />
         <MetricCard
           label="Total Actual"
-          value={formatUGX(data.summary.totalActual)}
+          value={formatUGX(data.summary.totalSpent)}
           icon={<TrendingUp className="w-5 h-5" />}
         />
         <MetricCard
           label="Total Variance"
-          value={formatUGX(data.summary.totalVariance)}
-          icon={data.summary.totalVariance >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
+          value={formatUGX(data.summary.variance)}
+          icon={data.summary.variance >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
         />
         <MetricCard
           label="Budget Utilization"
-          value={`${data.summary.utilizationPercent.toFixed(1)}%`}
+          value={`${data.summary.overallUtilization.toFixed(1)}%`}
           icon={<Calendar className="w-5 h-5" />}
         />
       </div>
 
       <Card className="p-5">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Budget vs Actual by Category</h2>
-        {data.items.length > 0 && (
+        {data.budgets.length > 0 && (
           <div className="mb-6">
             <div className="flex items-end gap-2 h-48">
-              {data.items.map((item) => {
-                const maxVal = Math.max(item.budgeted, item.actual, 1)
+              {data.budgets.map((item) => {
+                const maxVal = Math.max(item.budgetedAmount, item.actualSpent, 1)
                 return (
                   <div key={item.id} className="flex-1 flex flex-col items-center gap-2">
                     <div className="w-full flex items-end gap-1 h-40">
                       <div
                         className="flex-1 bg-blue-400 dark:bg-blue-600 rounded-t-sm transition-all duration-300"
-                        style={{ height: `${(item.budgeted / maxVal) * 100}%`, minHeight: "4px" }}
-                        title={`Budgeted: ${formatUGX(item.budgeted)}`}
+                        style={{ height: `${(item.budgetedAmount / maxVal) * 100}%`, minHeight: "4px" }}
+                        title={`Budgeted: ${formatUGX(item.budgetedAmount)}`}
                       />
                       <div
                         className={`flex-1 rounded-t-sm transition-all duration-300 ${
-                          item.actual > item.budgeted ? "bg-red-500" : "bg-green-500"
+                          item.actualSpent > item.budgetedAmount ? "bg-red-500" : "bg-green-500"
                         }`}
-                        style={{ height: `${(item.actual / maxVal) * 100}%`, minHeight: "4px" }}
-                        title={`Actual: ${formatUGX(item.actual)}`}
+                        style={{ height: `${(item.actualSpent / maxVal) * 100}%`, minHeight: "4px" }}
+                        title={`Actual: ${formatUGX(item.actualSpent)}`}
                       />
                     </div>
                     <span className="text-[10px] text-gray-500 dark:text-gray-400 truncate w-full text-center">
@@ -341,7 +344,7 @@ export default function BudgetPage() {
         )}
         <Table
           columns={columns}
-          data={data.items as unknown as Record<string, unknown>[]}
+          data={data.budgets as unknown as Record<string, unknown>[]}
           emptyMessage="No budget items found. Add your first budget category."
         />
       </Card>

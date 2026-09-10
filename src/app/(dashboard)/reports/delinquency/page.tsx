@@ -11,23 +11,36 @@ import { formatUGX } from "@/lib/utils"
 
 interface DelinquencyData {
   summary: {
-    low: number
-    medium: number
-    high: number
-    critical: number
-    totalAtRisk: number
-    totalAtRiskAmount: number
+    totalOverdueLoans: number
+    totalActiveLoans: number
+    delinquencyRate: number
+    totalAtRiskPortfolio: number
+    totalPendingFines: number
+    riskBreakdown: {
+      low: { count: number; amount: number }
+      medium: { count: number; amount: number }
+      high: { count: number; amount: number }
+      critical: { count: number; amount: number }
+    }
   }
-  overdueLoans: Array<{
-    id: number
+  loans: Array<{
+    loanId: number
     loanCode: string
+    memberId: number
     memberName: string
+    memberCode: string
+    phoneNumber: string
     principalAmount: number
     currentBalance: number
+    disbursementDate: string
+    dueDate: string | null
     daysOverdue: number
     riskLevel: string
-    lastPaymentDate: string
-    nextDueDate: string
+    pendingFines: number
+    lastPayment: {
+      amount: number
+      date: string
+    } | null
   }>
 }
 
@@ -59,7 +72,7 @@ export default function DelinquencyPage() {
   const riskCards = data ? [
     {
       label: "Low Risk",
-      value: data.summary.low,
+      value: data.summary.riskBreakdown.low.count,
       icon: <Shield className="w-5 h-5" />,
       color: "text-green-600 dark:text-green-400",
       bg: "bg-green-100 dark:bg-green-900/30",
@@ -67,7 +80,7 @@ export default function DelinquencyPage() {
     },
     {
       label: "Medium Risk",
-      value: data.summary.medium,
+      value: data.summary.riskBreakdown.medium.count,
       icon: <AlertCircle className="w-5 h-5" />,
       color: "text-amber-600 dark:text-amber-400",
       bg: "bg-amber-100 dark:bg-amber-900/30",
@@ -75,7 +88,7 @@ export default function DelinquencyPage() {
     },
     {
       label: "High Risk",
-      value: data.summary.high,
+      value: data.summary.riskBreakdown.high.count,
       icon: <AlertTriangle className="w-5 h-5" />,
       color: "text-orange-600 dark:text-orange-400",
       bg: "bg-orange-100 dark:bg-orange-900/30",
@@ -83,7 +96,7 @@ export default function DelinquencyPage() {
     },
     {
       label: "Critical",
-      value: data.summary.critical,
+      value: data.summary.riskBreakdown.critical.count,
       icon: <Skull className="w-5 h-5" />,
       color: "text-red-600 dark:text-red-400",
       bg: "bg-red-100 dark:bg-red-900/30",
@@ -160,13 +173,16 @@ export default function DelinquencyPage() {
       ),
     },
     {
-      key: "lastPaymentDate",
+      key: "lastPayment",
       header: "Last Payment",
-      render: (item: Record<string, unknown>) => (
-        <span className="text-xs text-gray-500 dark:text-gray-400">
-          {item.lastPaymentDate ? new Date(item.lastPaymentDate as string).toLocaleDateString() : "—"}
-        </span>
-      ),
+      render: (item: Record<string, unknown>) => {
+        const lastPayment = item.lastPayment as { amount: number; date: string } | null
+        return (
+          <span className="text-xs text-gray-500 dark:text-gray-400">
+            {lastPayment ? new Date(lastPayment.date).toLocaleDateString() : "—"}
+          </span>
+        )
+      },
     },
   ]
 
@@ -232,19 +248,19 @@ export default function DelinquencyPage() {
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Total At-Risk Portfolio</h2>
           <div className="flex items-center gap-2">
             <DollarSign className="w-5 h-5 text-red-500" />
-            <span className="text-2xl font-bold text-red-600 dark:text-red-400">{formatUGX(data.summary.totalAtRiskAmount)}</span>
+            <span className="text-2xl font-bold text-red-600 dark:text-red-400">{formatUGX(data.summary.totalAtRiskPortfolio)}</span>
           </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50">
             <p className="text-sm text-gray-500 dark:text-gray-400">Total At-Risk Loans</p>
-            <p className="text-xl font-bold text-gray-900 dark:text-white mt-1">{data.summary.totalAtRisk}</p>
+            <p className="text-xl font-bold text-gray-900 dark:text-white mt-1">{data.summary.totalOverdueLoans}</p>
           </div>
           <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50">
             <p className="text-sm text-gray-500 dark:text-gray-400">Average Days Overdue</p>
             <p className="text-xl font-bold text-gray-900 dark:text-white mt-1">
-              {data.overdueLoans.length > 0
-                ? Math.round(data.overdueLoans.reduce((s, l) => s + l.daysOverdue, 0) / data.overdueLoans.length)
+              {data.loans.length > 0
+                ? Math.round(data.loans.reduce((s, l) => s + l.daysOverdue, 0) / data.loans.length)
                 : 0} days
             </p>
           </div>
@@ -255,7 +271,7 @@ export default function DelinquencyPage() {
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Overdue Loans</h2>
         <Table
           columns={columns}
-          data={data.overdueLoans as unknown as Record<string, unknown>[]}
+          data={data.loans as unknown as Record<string, unknown>[]}
           emptyMessage="No overdue loans found"
           emptyIcon={<AlertTriangle className="w-12 h-12 mb-3 opacity-50" />}
         />

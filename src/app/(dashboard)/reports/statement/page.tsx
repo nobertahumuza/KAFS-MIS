@@ -19,16 +19,6 @@ interface Member {
   status: string | null
 }
 
-interface Transaction {
-  id: number
-  type: string
-  description: string
-  amount: number
-  balance: number
-  date: string
-  reference: string
-}
-
 interface StatementData {
   profile: {
     id: number
@@ -43,30 +33,51 @@ interface StatementData {
     status: string
   }
   savings: {
+    currentBalance: number
+    transactions: Array<{
+      date: string
+      type: string
+      amount: number
+      balanceAfter: number
+      narration: string | null
+      referenceNumber: string | null
+    }>
     totalDeposits: number
     totalWithdrawals: number
-    currentBalance: number
     transactionCount: number
   }
-  loan: {
-    totalBorrowed: number
-    totalRepaid: number
-    outstandingBalance: number
-    activeLoans: number
-    loanHistory: Array<{
-      id: number
-      loanCode: string
-      amount: number
-      status: string
-      disbursedDate: string
+  loans: Array<{
+    loanCode: string
+    principalAmount: number
+    interestRate: number
+    currentBalance: number
+    status: string
+    disbursementDate: string
+    dueDate: string | null
+    totalPaid: number
+    totalFines: number
+    totalFinePaid: number
+  }>
+  shares: {
+    totalQuantity: number
+    totalValue: number
+    transactions: Array<{
+      date: string
+      type: string
+      sharesQuantity: number
+      sharePrice: number
+      totalAmount: number
+      narration: string | null
+      referenceNumber: string | null
     }>
   }
-  shares: {
+  summary: {
+    totalSavings: number
     totalShares: number
-    shareValue: number
-    totalValue: number
+    totalFixedDeposits: number
+    totalLoanOutstanding: number
+    netWorth: number
   }
-  transactions: Transaction[]
 }
 
 export default function StatementPage() {
@@ -168,14 +179,18 @@ export default function StatementPage() {
       y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10
 
       doc.text("Loan Summary", 14, y); y += 7
+      const totalBorrowed = statement.loans.reduce((s, l) => s + l.principalAmount, 0)
+      const totalRepaid = statement.loans.reduce((s, l) => s + l.totalPaid, 0)
+      const outstandingBalance = statement.loans.reduce((s, l) => s + l.currentBalance, 0)
+      const activeLoans = statement.loans.filter((l) => l.status === "Active").length
       autoTable(doc, {
         startY: y,
         head: [["Metric", "Value"]],
         body: [
-          ["Total Borrowed", formatUGX(statement.loan.totalBorrowed)],
-          ["Total Repaid", formatUGX(statement.loan.totalRepaid)],
-          ["Outstanding Balance", formatUGX(statement.loan.outstandingBalance)],
-          ["Active Loans", String(statement.loan.activeLoans)],
+          ["Total Borrowed", formatUGX(totalBorrowed)],
+          ["Total Repaid", formatUGX(totalRepaid)],
+          ["Outstanding Balance", formatUGX(outstandingBalance)],
+          ["Active Loans", String(activeLoans)],
         ],
       })
       y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10
@@ -185,24 +200,23 @@ export default function StatementPage() {
         startY: y,
         head: [["Metric", "Value"]],
         body: [
-          ["Total Shares", String(statement.shares.totalShares)],
-          ["Share Value", formatUGX(statement.shares.shareValue)],
+          ["Total Shares", String(statement.shares.totalQuantity)],
           ["Total Value", formatUGX(statement.shares.totalValue)],
         ],
       })
       y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10
 
-      if (statement.transactions.length > 0) {
+      if (statement.savings.transactions.length > 0) {
         doc.text("Transaction History", 14, y); y += 7
         autoTable(doc, {
           startY: y,
           head: [["Date", "Type", "Description", "Amount", "Balance"]],
-          body: statement.transactions.map((t) => [
+          body: statement.savings.transactions.map((t) => [
             formatDate(t.date),
             t.type,
-            t.description,
+            t.narration ?? "",
             formatUGX(t.amount),
-            formatUGX(t.balance),
+            formatUGX(t.balanceAfter),
           ]),
         })
       }
@@ -348,12 +362,12 @@ export default function StatementPage() {
             />
             <MetricCard
               label="Loan Outstanding"
-              value={formatUGX(statement.loan.outstandingBalance)}
+              value={formatUGX(statement.summary.totalLoanOutstanding)}
               icon={<CreditCard className="w-5 h-5" />}
             />
             <MetricCard
               label="Total Shares"
-              value={`${statement.shares.totalShares} shares`}
+              value={`${statement.shares.totalQuantity} shares`}
               icon={<TrendingUp className="w-5 h-5" />}
             />
             <MetricCard
@@ -393,36 +407,36 @@ export default function StatementPage() {
               <div className="space-y-3">
                 <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
                   <span className="text-sm text-gray-600 dark:text-gray-400">Total Borrowed</span>
-                  <span className="text-sm font-semibold">{formatUGX(statement.loan.totalBorrowed)}</span>
+                  <span className="text-sm font-semibold">{formatUGX(statement.loans.reduce((s, l) => s + l.principalAmount, 0))}</span>
                 </div>
                 <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
                   <span className="text-sm text-gray-600 dark:text-gray-400">Total Repaid</span>
-                  <span className="text-sm font-semibold text-green-600">{formatUGX(statement.loan.totalRepaid)}</span>
+                  <span className="text-sm font-semibold text-green-600">{formatUGX(statement.loans.reduce((s, l) => s + l.totalPaid, 0))}</span>
                 </div>
                 <div className="flex justify-between items-center py-2">
                   <span className="text-sm font-medium text-gray-900 dark:text-white">Outstanding Balance</span>
-                  <span className="text-sm font-bold text-red-600">{formatUGX(statement.loan.outstandingBalance)}</span>
+                  <span className="text-sm font-bold text-red-600">{formatUGX(statement.summary.totalLoanOutstanding)}</span>
                 </div>
                 <div className="flex justify-between items-center py-2 border-t border-gray-100 dark:border-gray-800">
                   <span className="text-sm text-gray-600 dark:text-gray-400">Active Loans</span>
-                  <Badge variant="info">{statement.loan.activeLoans}</Badge>
+                  <Badge variant="info">{statement.loans.filter((l) => l.status === "Active").length}</Badge>
                 </div>
               </div>
             </Card>
           </div>
 
-          {statement.loan.loanHistory.length > 0 && (
+          {statement.loans.length > 0 && (
             <Card className="p-5">
               <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Loan History</h3>
               <div className="space-y-3">
-                {statement.loan.loanHistory.map((loan) => (
-                  <div key={loan.id} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                {statement.loans.map((loan) => (
+                  <div key={loan.loanCode} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50">
                     <div>
                       <p className="text-sm font-medium text-gray-900 dark:text-white">{loan.loanCode}</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Disbursed: {formatDate(loan.disbursedDate)}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Disbursed: {formatDate(loan.disbursementDate)}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-semibold text-gray-900 dark:text-white">{formatUGX(loan.amount)}</p>
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white">{formatUGX(loan.principalAmount)}</p>
                       <Badge variant={loan.status === "Active" ? "success" : "default"}>{loan.status}</Badge>
                     </div>
                   </div>
@@ -431,7 +445,7 @@ export default function StatementPage() {
             </Card>
           )}
 
-          {statement.transactions.length > 0 && (
+          {statement.savings.transactions.length > 0 && (
             <Card className="p-5">
               <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
                 <Calendar className="w-4 h-4" />
@@ -450,16 +464,16 @@ export default function StatementPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                    {statement.transactions.map((t) => (
-                      <tr key={t.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                    {statement.savings.transactions.map((t, idx) => (
+                      <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                         <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">{formatDate(t.date)}</td>
                         <td className="px-4 py-3">
                           <Badge variant={t.type === "Deposit" || t.type === "Savings" ? "success" : "danger"}>
                             {t.type}
                           </Badge>
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">{t.description}</td>
-                        <td className="px-4 py-3 text-xs font-mono text-gray-500 dark:text-gray-400">{t.reference}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900 dark:text-white">{t.narration || "—"}</td>
+                        <td className="px-4 py-3 text-xs font-mono text-gray-500 dark:text-gray-400">{t.referenceNumber || "—"}</td>
                         <td className={`px-4 py-3 text-sm text-right font-semibold ${
                           t.type === "Deposit" || t.type === "Savings"
                             ? "text-green-600 dark:text-green-400"
@@ -468,7 +482,7 @@ export default function StatementPage() {
                           {t.type === "Deposit" || t.type === "Savings" ? "+" : "-"}{formatUGX(t.amount)}
                         </td>
                         <td className="px-4 py-3 text-sm text-right font-semibold text-gray-900 dark:text-white">
-                          {formatUGX(t.balance)}
+                          {formatUGX(t.balanceAfter)}
                         </td>
                       </tr>
                     ))}
@@ -478,7 +492,7 @@ export default function StatementPage() {
             </Card>
           )}
 
-          {!loading && statement && statement.transactions.length === 0 && (
+          {!loading && statement && statement.savings.transactions.length === 0 && (
             <Card className="p-12 text-center">
               <FileText className="w-12 h-12 mx-auto text-gray-400 mb-3" />
               <p className="text-gray-500 dark:text-gray-400">No transactions found for the selected period.</p>

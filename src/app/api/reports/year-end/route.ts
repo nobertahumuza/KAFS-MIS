@@ -2,6 +2,108 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { requireAuth } from "@/lib/auth"
 
+export async function GET() {
+  try {
+    await requireAuth()
+
+    const now = new Date()
+
+    const activeFiscalYear = await prisma.fiscalYear.findFirst({
+      where: { status: "Active" },
+      orderBy: { year: "desc" },
+    })
+
+    let currentYearInfo = null
+    let summary = { totalIncome: 0, totalExpenses: 0, netIncome: 0, daysRemaining: 0 }
+
+    if (activeFiscalYear) {
+      const startDate = new Date(activeFiscalYear.year, 0, 1)
+      const endDate = new Date(activeFiscalYear.year, 11, 31, 23, 59, 59, 999)
+
+      const [totalDeposits, totalExpenses] = await Promise.all([
+        prisma.savingsLedger.aggregate({
+          _sum: { amount: true },
+          where: { transactionType: "Deposit", transactionDate: { gte: startDate, lte: endDate } },
+        }),
+        prisma.expense.aggregate({
+          _sum: { amount: true },
+          where: { expenseDate: { gte: startDate, lte: endDate } },
+        }),
+      ])
+
+      const totalIncome = totalDeposits._sum.amount ?? 0
+      const totalExpensesVal = totalExpenses._sum.amount ?? 0
+      const netIncome = totalIncome - totalExpensesVal
+
+      const endOfYear = new Date(activeFiscalYear.year, 11, 31)
+      const daysRemaining = Math.max(0, Math.ceil((endOfYear.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)))
+
+      currentYearInfo = {
+        id: activeFiscalYear.id,
+        year: String(activeFiscalYear.year),
+        startDate: activeFiscalYear.startDate.toISOString(),
+        endDate: activeFiscalYear.endDate.toISOString(),
+        status: activeFiscalYear.status,
+        totalIncome,
+        totalExpenses: totalExpensesVal,
+        netIncome,
+        closedAt: activeFiscalYear.closedAt?.toISOString() ?? null,
+        closedBy: activeFiscalYear.closedBy != null ? String(activeFiscalYear.closedBy) : null,
+      }
+
+      summary = { totalIncome, totalExpenses: totalExpensesVal, netIncome, daysRemaining }
+    }
+
+    const closedFiscalYears = await prisma.fiscalYear.findMany({
+      where: { status: "Closed" },
+      orderBy: { year: "desc" },
+    })
+
+    const closedYears = await Promise.all(
+      closedFiscalYears.map(async (fy) => {
+        const startDate = new Date(fy.year, 0, 1)
+        const endDate = new Date(fy.year, 11, 31, 23, 59, 59, 999)
+
+        const [totalDeposits, totalExpenses] = await Promise.all([
+          prisma.savingsLedger.aggregate({
+            _sum: { amount: true },
+            where: { transactionType: "Deposit", transactionDate: { gte: startDate, lte: endDate } },
+          }),
+          prisma.expense.aggregate({
+            _sum: { amount: true },
+            where: { expenseDate: { gte: startDate, lte: endDate } },
+          }),
+        ])
+
+        const totalIncome = totalDeposits._sum.amount ?? 0
+        const totalExpensesVal = totalExpenses._sum.amount ?? 0
+
+        return {
+          id: fy.id,
+          year: String(fy.year),
+          startDate: fy.startDate.toISOString(),
+          endDate: fy.endDate.toISOString(),
+          status: fy.status,
+          totalIncome,
+          totalExpenses: totalExpensesVal,
+          netIncome: totalIncome - totalExpensesVal,
+          closedAt: fy.closedAt?.toISOString() ?? null,
+          closedBy: fy.closedBy != null ? String(fy.closedBy) : null,
+        }
+      })
+    )
+
+    return NextResponse.json({
+      currentYear: currentYearInfo,
+      closedYears,
+      summary,
+    })
+  } catch (error) {
+    console.error("GET /api/reports/year-end error:", error)
+    return NextResponse.json({ error: "Failed to fetch year-end data" }, { status: 500 })
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const user = await requireAuth()

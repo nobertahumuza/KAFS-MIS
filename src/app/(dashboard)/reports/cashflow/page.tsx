@@ -1,30 +1,44 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { TrendingUp, TrendingDown, DollarSign, RefreshCw, ArrowUpRight, ArrowDownRight, Minus } from "lucide-react"
+import { TrendingUp, TrendingDown, DollarSign, RefreshCw, ArrowUpRight, ArrowDownRight } from "lucide-react"
 import PageHeader from "@/components/ui/PageHeader"
 import { Card, MetricCard } from "@/components/ui/Card"
 import Badge from "@/components/ui/Badge"
 import Button from "@/components/ui/Button"
 import { formatUGX } from "@/lib/utils"
 
+interface MonthlyData {
+  month: string
+  deposits: number
+  withdrawals: number
+  loanDisbursements: number
+  loanRepayments: number
+  expenses: number
+  netCashFlow: number
+}
+
+interface ForecastData {
+  month: string
+  deposits: number
+  withdrawals: number
+  loanDisbursements: number
+  loanRepayments: number
+  expenses: number
+  netCashFlow: number
+}
+
 interface CashFlowData {
-  monthly: Array<{
-    month: string
-    deposits: number
-    withdrawals: number
-    expenses: number
-  }>
-  forecast: Array<{
-    month: string
-    projectedInflow: number
-    projectedOutflow: number
-  }>
+  monthlyData: MonthlyData[]
   summary: {
-    totalInflow: number
-    totalOutflow: number
+    totalDeposits: number
+    totalWithdrawals: number
+    totalLoanDisbursements: number
+    totalLoanRepayments: number
+    totalExpenses: number
     netCashFlow: number
   }
+  forecast: ForecastData[]
 }
 
 export default function CashFlowPage() {
@@ -52,12 +66,16 @@ export default function CashFlowPage() {
     fetchData()
   }, [])
 
-  const maxValue = data?.monthly
-    ? Math.max(...data.monthly.flatMap((m) => [m.deposits, m.withdrawals, m.expenses]), 1)
+  const monthly = data?.monthlyData ?? []
+  const forecast = data?.forecast ?? []
+  const summary = data?.summary
+
+  const maxValue = monthly.length > 0
+    ? Math.max(...monthly.flatMap((m) => [m.deposits, m.withdrawals, m.expenses]), 1)
     : 1
 
-  const maxForecastValue = data?.forecast
-    ? Math.max(...data.forecast.flatMap((m) => [m.projectedInflow, m.projectedOutflow]), 1)
+  const maxForecastValue = forecast.length > 0
+    ? Math.max(...forecast.flatMap((m) => [m.deposits, m.withdrawals]), 1)
     : 1
 
   if (loading) {
@@ -84,6 +102,9 @@ export default function CashFlowPage() {
     )
   }
 
+  const totalInflow = (summary?.totalDeposits ?? 0) + (summary?.totalLoanRepayments ?? 0)
+  const totalOutflow = (summary?.totalWithdrawals ?? 0) + (summary?.totalLoanDisbursements ?? 0) + (summary?.totalExpenses ?? 0)
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -104,21 +125,21 @@ export default function CashFlowPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <MetricCard
           label="Total Inflow"
-          value={formatUGX(data.summary.totalInflow)}
+          value={formatUGX(totalInflow)}
           icon={<TrendingUp className="w-5 h-5" />}
         />
         <MetricCard
           label="Total Outflow"
-          value={formatUGX(data.summary.totalOutflow)}
+          value={formatUGX(totalOutflow)}
           icon={<TrendingDown className="w-5 h-5" />}
         />
         <MetricCard
           label="Net Cash Flow"
-          value={formatUGX(data.summary.netCashFlow)}
+          value={formatUGX(summary?.netCashFlow ?? 0)}
           icon={<DollarSign className="w-5 h-5" />}
           trend={{
-            value: Math.abs(Math.round((data.summary.netCashFlow / (data.summary.totalInflow || 1)) * 100)),
-            isPositive: data.summary.netCashFlow >= 0,
+            value: Math.abs(Math.round(((summary?.netCashFlow ?? 0) / (totalInflow || 1)) * 100)),
+            isPositive: (summary?.netCashFlow ?? 0) >= 0,
           }}
         />
       </div>
@@ -141,29 +162,29 @@ export default function CashFlowPage() {
             </div>
           </div>
         </div>
-        {data.monthly.length > 0 ? (
+        {monthly.length > 0 ? (
           <div className="flex items-end gap-3 h-64">
-            {data.monthly.map((month) => (
-              <div key={month.month} className="flex-1 flex flex-col items-center gap-2">
+            {monthly.map((m) => (
+              <div key={m.month} className="flex-1 flex flex-col items-center gap-2">
                 <div className="w-full flex items-end gap-1 h-52">
                   <div
                     className="flex-1 bg-green-500 rounded-t-sm transition-all duration-300 hover:bg-green-600"
-                    style={{ height: `${(month.deposits / maxValue) * 100}%`, minHeight: month.deposits > 0 ? "4px" : "0px" }}
-                    title={`Deposits: ${formatUGX(month.deposits)}`}
+                    style={{ height: `${(m.deposits / maxValue) * 100}%`, minHeight: m.deposits > 0 ? "4px" : "0px" }}
+                    title={`Deposits: ${formatUGX(m.deposits)}`}
                   />
                   <div
                     className="flex-1 bg-blue-500 rounded-t-sm transition-all duration-300 hover:bg-blue-600"
-                    style={{ height: `${(month.withdrawals / maxValue) * 100}%`, minHeight: month.withdrawals > 0 ? "4px" : "0px" }}
-                    title={`Withdrawals: ${formatUGX(month.withdrawals)}`}
+                    style={{ height: `${(m.withdrawals / maxValue) * 100}%`, minHeight: m.withdrawals > 0 ? "4px" : "0px" }}
+                    title={`Withdrawals: ${formatUGX(m.withdrawals)}`}
                   />
                   <div
                     className="flex-1 bg-red-500 rounded-t-sm transition-all duration-300 hover:bg-red-600"
-                    style={{ height: `${(month.expenses / maxValue) * 100}%`, minHeight: month.expenses > 0 ? "4px" : "0px" }}
-                    title={`Expenses: ${formatUGX(month.expenses)}`}
+                    style={{ height: `${(m.expenses / maxValue) * 100}%`, minHeight: m.expenses > 0 ? "4px" : "0px" }}
+                    title={`Expenses: ${formatUGX(m.expenses)}`}
                   />
                 </div>
                 <span className="text-[10px] text-gray-500 dark:text-gray-400 truncate w-full text-center">
-                  {month.month}
+                  {m.month}
                 </span>
               </div>
             ))}
@@ -178,45 +199,45 @@ export default function CashFlowPage() {
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">3-Month Forecast</h2>
           <Badge variant="info">Projected</Badge>
         </div>
-        {data.forecast.length > 0 ? (
+        {forecast.length > 0 ? (
           <div className="space-y-4">
             <div className="flex items-end gap-3 h-48">
-              {data.forecast.map((month) => (
-                <div key={month.month} className="flex-1 flex flex-col items-center gap-2">
+              {forecast.map((m) => (
+                <div key={m.month} className="flex-1 flex flex-col items-center gap-2">
                   <div className="w-full flex items-end gap-1 h-40">
                     <div
                       className="flex-1 bg-green-400 rounded-t-sm transition-all duration-300"
-                      style={{ height: `${(month.projectedInflow / maxForecastValue) * 100}%`, minHeight: month.projectedInflow > 0 ? "4px" : "0px" }}
-                      title={`Projected Inflow: ${formatUGX(month.projectedInflow)}`}
+                      style={{ height: `${(m.deposits / maxForecastValue) * 100}%`, minHeight: m.deposits > 0 ? "4px" : "0px" }}
+                      title={`Projected Inflow: ${formatUGX(m.deposits)}`}
                     />
                     <div
                       className="flex-1 bg-blue-400 rounded-t-sm transition-all duration-300"
-                      style={{ height: `${(month.projectedOutflow / maxForecastValue) * 100}%`, minHeight: month.projectedOutflow > 0 ? "4px" : "0px" }}
-                      title={`Projected Outflow: ${formatUGX(month.projectedOutflow)}`}
+                      style={{ height: `${(m.withdrawals / maxForecastValue) * 100}%`, minHeight: m.withdrawals > 0 ? "4px" : "0px" }}
+                      title={`Projected Outflow: ${formatUGX(m.withdrawals)}`}
                     />
                   </div>
                   <span className="text-xs text-gray-500 dark:text-gray-400 truncate w-full text-center">
-                    {month.month}
+                    {m.month}
                   </span>
                 </div>
               ))}
             </div>
             <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {data.forecast.map((month) => {
-                  const net = month.projectedInflow - month.projectedOutflow
+                {forecast.map((m) => {
+                  const net = m.netCashFlow
                   return (
-                    <div key={month.month} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                    <div key={m.month} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50">
                       <div>
-                        <p className="text-sm font-medium text-gray-900 dark:text-white">{month.month}</p>
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">{m.month}</p>
                         <div className="flex items-center gap-2 mt-1">
                           <span className="flex items-center gap-1 text-xs text-green-600">
-                            <ArrowDownRight className="w-3 h-3" /> {formatUGX(month.projectedInflow)}
+                            <ArrowDownRight className="w-3 h-3" /> {formatUGX(m.deposits)}
                           </span>
                         </div>
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="flex items-center gap-1 text-xs text-red-600">
-                            <ArrowUpRight className="w-3 h-3" /> {formatUGX(month.projectedOutflow)}
+                            <ArrowUpRight className="w-3 h-3" /> {formatUGX(m.withdrawals + m.loanDisbursements + m.expenses)}
                           </span>
                         </div>
                       </div>
@@ -254,14 +275,14 @@ export default function CashFlowPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-              {data.monthly.map((month) => {
-                const net = month.deposits - month.withdrawals - month.expenses
+              {monthly.map((m) => {
+                const net = m.deposits - m.withdrawals - m.expenses
                 return (
-                  <tr key={month.month} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                    <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{month.month}</td>
-                    <td className="px-4 py-3 text-sm text-right text-green-600 dark:text-green-400 font-semibold">{formatUGX(month.deposits)}</td>
-                    <td className="px-4 py-3 text-sm text-right text-blue-600 dark:text-blue-400">{formatUGX(month.withdrawals)}</td>
-                    <td className="px-4 py-3 text-sm text-right text-red-600 dark:text-red-400">{formatUGX(month.expenses)}</td>
+                  <tr key={m.month} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{m.month}</td>
+                    <td className="px-4 py-3 text-sm text-right text-green-600 dark:text-green-400 font-semibold">{formatUGX(m.deposits)}</td>
+                    <td className="px-4 py-3 text-sm text-right text-blue-600 dark:text-blue-400">{formatUGX(m.withdrawals)}</td>
+                    <td className="px-4 py-3 text-sm text-right text-red-600 dark:text-red-400">{formatUGX(m.expenses)}</td>
                     <td className="px-4 py-3 text-sm text-right">
                       <span className={`font-semibold ${net >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
                         {net >= 0 ? "+" : ""}{formatUGX(net)}
