@@ -24,7 +24,6 @@ export const SIDEBAR_NAV = [
   { icon: 'BarChart3', label: 'Reports', href: '/reports', roles: [ROLES.ADMIN, ROLES.TREASURER] },
   { icon: 'MessageSquare', label: 'SMS', href: '/sms', roles: [ROLES.ADMIN, ROLES.CASHIER] },
   { icon: 'Settings', label: 'Settings', href: '/settings', roles: [ROLES.ADMIN] },
-  { icon: 'User', label: 'Member Portal', href: '/member-portal', roles: [ROLES.ADMIN, ROLES.CASHIER, ROLES.LOANS_OFFICER, ROLES.TREASURER] },
 ] as const
 
 export const TRANSACTION_TYPES = {

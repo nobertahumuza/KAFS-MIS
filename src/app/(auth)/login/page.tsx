@@ -3,18 +3,19 @@
 import { useState } from "react"
 import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { Eye, EyeOff, Loader2 } from "lucide-react"
+import { Eye, EyeOff, Loader2, User, Shield } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export default function LoginPage() {
   const router = useRouter()
+  const [mode, setMode] = useState<"staff" | "member">("staff")
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleStaffLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
     setLoading(true)
@@ -61,88 +62,135 @@ export default function LoginPage() {
             </p>
           </div>
 
+          <div className="flex gap-2 mb-6 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
+            <button
+              type="button"
+              onClick={() => { setMode("staff"); setError(""); setUsername(""); setPassword("") }}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all",
+                mode === "staff"
+                  ? "bg-[var(--color-primary)] text-white shadow-md"
+                  : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+              )}
+            >
+              <Shield className="w-4 h-4" />
+              Staff Login
+            </button>
+            <button
+              type="button"
+              onClick={() => { setMode("member"); setError(""); setUsername(""); setPassword("") }}
+              className={cn(
+                "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all",
+                mode === "member"
+                  ? "bg-[var(--color-primary)] text-white shadow-md"
+                  : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+              )}
+            >
+              <User className="w-4 h-4" />
+              Member Portal
+            </button>
+          </div>
+
           {error && (
             <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm">
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                Username
-              </label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className={cn(
-                  "w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600",
-                  "bg-white dark:bg-gray-800 text-gray-900 dark:text-white",
-                  "focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent",
-                  "placeholder:text-gray-400 dark:placeholder:text-gray-500",
-                  "transition-colors"
-                )}
-                placeholder="Enter your username"
-                required
-                autoComplete="username"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                Password
-              </label>
-              <div className="relative">
+          {mode === "staff" ? (
+            <form onSubmit={handleStaffLogin} className="space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Username
+                </label>
                 <input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                   className={cn(
-                    "w-full px-4 py-2.5 pr-10 rounded-lg border border-gray-300 dark:border-gray-600",
+                    "w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600",
                     "bg-white dark:bg-gray-800 text-gray-900 dark:text-white",
                     "focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent",
                     "placeholder:text-gray-400 dark:placeholder:text-gray-500",
                     "transition-colors"
                   )}
-                  placeholder="Enter your password"
+                  placeholder="Enter your username"
                   required
-                  autoComplete="current-password"
+                  autoComplete="username"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                >
-                  {showPassword ? (
-                    <EyeOff className="w-5 h-5" />
-                  ) : (
-                    <Eye className="w-5 h-5" />
-                  )}
-                </button>
               </div>
-            </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className={cn(
-                "w-full py-2.5 px-4 rounded-lg font-semibold text-white",
-                "bg-[var(--color-primary)] hover:bg-[var(--color-primary-dark)]",
-                "disabled:opacity-50 disabled:cursor-not-allowed",
-                "transition-colors flex items-center justify-center gap-2"
-              )}
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Signing in...
-                </>
-              ) : (
-                "Sign In"
-              )}
-            </button>
-          </form>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className={cn(
+                      "w-full px-4 py-2.5 pr-10 rounded-lg border border-gray-300 dark:border-gray-600",
+                      "bg-white dark:bg-gray-800 text-gray-900 dark:text-white",
+                      "focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent",
+                      "placeholder:text-gray-400 dark:placeholder:text-gray-500",
+                      "transition-colors"
+                    )}
+                    placeholder="Enter your password"
+                    required
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className={cn(
+                  "w-full py-2.5 px-4 rounded-lg font-semibold text-white",
+                  "bg-[var(--color-primary)] hover:bg-[var(--color-primary-dark)]",
+                  "disabled:opacity-50 disabled:cursor-not-allowed",
+                  "transition-colors flex items-center justify-center gap-2"
+                )}
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Signing in...
+                  </>
+                ) : (
+                  "Sign In"
+                )}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={(e) => { e.preventDefault(); router.push("/member-portal") }} className="space-y-5">
+              <div className="text-center py-4">
+                <User className="w-16 h-16 mx-auto text-[var(--color-primary)] dark:text-[var(--color-gold)] mb-4" />
+                <p className="text-gray-600 dark:text-gray-400 text-sm">
+                  Access your member account to view savings, loans, shares, and transaction history.
+                </p>
+              </div>
+              <button
+                type="submit"
+                className={cn(
+                  "w-full py-2.5 px-4 rounded-lg font-semibold text-white",
+                  "bg-[var(--color-gold)] hover:bg-yellow-600",
+                  "transition-colors flex items-center justify-center gap-2"
+                )}
+              >
+                <User className="w-5 h-5" />
+                Continue as Member
+              </button>
+            </form>
+          )}
         </div>
       </div>
     </div>

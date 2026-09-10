@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Printer, Calendar, TrendingUp, Users, DollarSign, FileText, Shield, Mail, Download } from "lucide-react"
+import { Printer, Calendar, TrendingUp, Users, DollarSign, FileText, Shield, Mail, Download, Receipt, Wallet } from "lucide-react"
 import PageHeader from "@/components/ui/PageHeader"
 import Table from "@/components/ui/Table"
 import Badge from "@/components/ui/Badge"
@@ -77,6 +77,7 @@ export default function ReportsPage() {
   const [loansReport, setLoansReport] = useState<LoansReport>({ totalLoans: 0, activeLoans: 0, totalDisbursed: 0, totalRepaid: 0, outstandingBalance: 0, recentLoans: [] })
   const [membersReport, setMembersReport] = useState<MembersReport>({ totalMembers: 0, activeMembers: 0, newThisMonth: 0, genderDistribution: { male: 0, female: 0 } })
   const [financialReport, setFinancialReport] = useState<FinancialReport>({ totalAssets: 0, totalLiabilities: 0, netWorth: 0, totalExpenses: 0, totalIncome: 0 })
+  const [chargesReport, setChargesReport] = useState<{ withdrawalFees: number; loanInterest: number; smsCharges: number; totalCharges: number; withdrawalCount: number; loanCount: number }>({ withdrawalFees: 0, loanInterest: 0, smsCharges: 0, totalCharges: 0, withdrawalCount: 0, loanCount: 0 })
 
   const fetchReport = useCallback(async (tab: TabId) => {
     setLoading(true)
@@ -138,18 +139,48 @@ export default function ReportsPage() {
           })
         }
       } else if (tab === "financial") {
-        const [expRes, savingsRes] = await Promise.all([
+        const [expRes, savingsRes, loansRes, smsRes] = await Promise.all([
           fetch(`/api/expenses?${params}`),
           fetch(`/api/savings?${params}`),
+          fetch(`/api/loans?${params}`),
+          fetch(`/api/sms?${params}`),
         ])
         const expData = expRes.ok ? await expRes.json() : { summary: { totalExpenses: 0 } }
-        const savData = savingsRes.ok ? await savingsRes.json() : { summary: { totalDeposits: 0 } }
+        const savData = savingsRes.ok ? await savingsRes.json() : { summary: { totalDeposits: 0 }, transactions: [] }
+        const loansData = loansRes.ok ? await loansRes.json() : { data: [] }
+        const smsData = smsRes.ok ? await smsRes.json() : { logs: [] }
+
+        const transactions = savData.transactions || []
+        const withdrawals = transactions.filter((t: Record<string, unknown>) => t.transactionType === "Withdrawal")
+        const withdrawalFees = withdrawals.reduce((s: number, t: Record<string, unknown>) => s + ((t.withdrawalFee as number) || 0), 0)
+        const withdrawalCount = withdrawals.length
+
+        const loans = loansData.data || loansData.loans || []
+        const activeLoans = loans.filter((l: Record<string, unknown>) => l.loanStatus === "Active")
+        const totalDisbursed = activeLoans.reduce((s: number, l: Record<string, unknown>) => s + ((l.principalAmount as number) || 0), 0)
+        const loanInterest = activeLoans.reduce((s: number, l: Record<string, unknown>) => {
+          const principal = (l.principalAmount as number) || 0
+          const rate = (l.interestRate as number) || 2.5
+          return s + principal * (rate / 100)
+        }, 0)
+
+        const smsLogs = smsData.logs || smsData.data || []
+        const smsCharges = smsLogs.length * 35
+
         setFinancialReport({
           totalAssets: savData.summary?.totalDeposits || 0,
-          totalLiabilities: 0,
+          totalLiabilities: loansData.summary?.outstandingBalance || activeLoans.reduce((s: number, l: Record<string, unknown>) => s + ((l.currentBalance as number) || 0), 0),
           netWorth: (savData.summary?.totalDeposits || 0) - (expData.summary?.totalExpenses || 0),
           totalExpenses: expData.summary?.totalExpenses || 0,
           totalIncome: savData.summary?.totalDeposits || 0,
+        })
+        setChargesReport({
+          withdrawalFees,
+          loanInterest,
+          smsCharges,
+          totalCharges: withdrawalFees + loanInterest + smsCharges,
+          withdrawalCount,
+          loanCount: activeLoans.length,
         })
       }
     } catch (err) {
@@ -276,6 +307,18 @@ export default function ReportsPage() {
             ["Total Income", formatUGX(financialReport.totalIncome)],
             ["Total Expenses", formatUGX(financialReport.totalExpenses)],
             ["Net Worth", formatUGX(financialReport.netWorth)],
+          ],
+        })
+        y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10
+        doc.text("Transaction Charges", 14, y); y += 8
+        autoTable(doc, {
+          startY: y,
+          head: [["Charge Type", "Amount", "Details"]],
+          body: [
+            ["Withdrawal Fees", formatUGX(chargesReport.withdrawalFees), `${chargesReport.withdrawalCount} × UGX 500`],
+            ["Loan Interest", formatUGX(chargesReport.loanInterest), `${chargesReport.loanCount} active loans`],
+            ["SMS Charges", formatUGX(chargesReport.smsCharges), "UGX 35/SMS"],
+            ["Total Charges", formatUGX(chargesReport.totalCharges), ""],
           ],
         })
       }
@@ -413,6 +456,69 @@ export default function ReportsPage() {
             <MetricCard label="Total Income" value={formatUGX(financialReport.totalIncome)} icon={<TrendingUp className="w-5 h-5" />} />
             <MetricCard label="Total Expenses" value={formatUGX(financialReport.totalExpenses)} icon={<TrendingUp className="w-5 h-5" />} />
             <MetricCard label="Net Worth" value={formatUGX(financialReport.netWorth)} icon={<DollarSign className="w-5 h-5" />} />
+          </div>
+
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm p-6">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4 flex items-center gap-2">
+              <Receipt className="w-4 h-4" />
+              Transaction Charges Breakdown
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                <div className="flex items-center gap-2 mb-2">
+                  <Wallet className="w-5 h-5 text-blue-600" />
+                  <p className="text-sm font-medium text-blue-800 dark:text-blue-300">Withdrawal Fees</p>
+                </div>
+                <p className="text-2xl font-bold text-blue-900 dark:text-blue-200">{formatUGX(chargesReport.withdrawalFees)}</p>
+                <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">{chargesReport.withdrawalCount} withdrawals × UGX 500</p>
+              </div>
+              <div className="p-4 rounded-xl bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
+                <div className="flex items-center gap-2 mb-2">
+                  <TrendingUp className="w-5 h-5 text-purple-600" />
+                  <p className="text-sm font-medium text-purple-800 dark:text-purple-300">Loan Interest</p>
+                </div>
+                <p className="text-2xl font-bold text-purple-900 dark:text-purple-200">{formatUGX(chargesReport.loanInterest)}</p>
+                <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">{chargesReport.loanCount} active loans (2.5% p.a.)</p>
+              </div>
+              <div className="p-4 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                <div className="flex items-center gap-2 mb-2">
+                  <FileText className="w-5 h-5 text-green-600" />
+                  <p className="text-sm font-medium text-green-800 dark:text-green-300">SMS Charges</p>
+                </div>
+                <p className="text-2xl font-bold text-green-900 dark:text-green-200">{formatUGX(chargesReport.smsCharges)}</p>
+                <p className="text-xs text-green-600 dark:text-green-400 mt-1">UGX 35 per SMS sent</p>
+              </div>
+              <div className="p-4 rounded-xl bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/30">
+                <div className="flex items-center gap-2 mb-2">
+                  <DollarSign className="w-5 h-5 text-[var(--color-primary)]" />
+                  <p className="text-sm font-medium text-[var(--color-primary)]">Total Charges</p>
+                </div>
+                <p className="text-2xl font-bold text-[var(--color-primary)]">{formatUGX(chargesReport.totalCharges)}</p>
+                <p className="text-xs text-[var(--color-primary)]/70 mt-1">All transaction fees</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm p-6">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Charges Summary</h3>
+            <div className="space-y-2">
+              <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
+                <span className="text-sm text-gray-600 dark:text-gray-400">Withdrawal Fee (UGX 500 per withdrawal)</span>
+                <span className="text-sm font-semibold">{formatUGX(chargesReport.withdrawalFees)}</span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
+                <span className="text-sm text-gray-600 dark:text-gray-400">Loan Interest (2.5% p.a. reducing balance)</span>
+                <span className="text-sm font-semibold">{formatUGX(chargesReport.loanInterest)}</span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-800">
+                <span className="text-sm text-gray-600 dark:text-gray-400">SMS Notification Charges (UGX 35/SMS)</span>
+                <span className="text-sm font-semibold">{formatUGX(chargesReport.smsCharges)}</span>
+              </div>
+              <div className="flex justify-between items-center py-2 font-bold">
+                <span className="text-sm text-gray-900 dark:text-white">Total Transaction Charges</span>
+                <span className="text-sm text-[var(--color-primary)]">{formatUGX(chargesReport.totalCharges)}</span>
+              </div>
+            </div>
           </div>
         </div>
       )}

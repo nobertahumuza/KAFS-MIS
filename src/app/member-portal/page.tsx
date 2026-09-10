@@ -1,13 +1,14 @@
 "use client"
 
-import { useState } from "react"
-import { User, Wallet, TrendingDown, TrendingUp, Landmark, PiggyBank, Download, LogOut, Eye, EyeOff, Clock } from "lucide-react"
+import { useState, useEffect } from "react"
+import { User, Wallet, TrendingDown, TrendingUp, Landmark, PiggyBank, Download, LogOut, Eye, EyeOff, Clock, PartyPopper } from "lucide-react"
 import PageHeader from "@/components/ui/PageHeader"
 import Badge from "@/components/ui/Badge"
 import Button from "@/components/ui/Button"
 import Input from "@/components/ui/Input"
 import { MetricCard } from "@/components/ui/Card"
 import { formatUGX, formatDate } from "@/lib/utils"
+import CelebrationPopup from "@/components/ui/CelebrationPopup"
 
 interface MemberData {
   member: {
@@ -106,6 +107,22 @@ export default function MemberPortalPage() {
 
   const [data, setData] = useState<MemberData | null>(null)
   const [activeTab, setActiveTab] = useState<Tab>("overview")
+  const [celebration, setCelebration] = useState<{ open: boolean; type: "deposit" | "withdrawal" | "loan" | "share" | "fixed"; amount: number; balance?: number; reference?: string; charges?: number }>({ open: false, type: "deposit", amount: 0 })
+
+  useEffect(() => {
+    if (data && !loggedIn) {
+      const timer = setTimeout(() => {
+        setCelebration({
+          open: true,
+          type: "deposit",
+          amount: data.savings.currentBalance,
+          balance: data.savings.currentBalance,
+          reference: "WELCOME",
+        })
+      }, 500)
+      return () => clearTimeout(timer)
+    }
+  }, [data, loggedIn])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -124,6 +141,15 @@ export default function MemberPortalPage() {
       const d = await res.json()
       setData(d)
       setLoggedIn(true)
+      setTimeout(() => {
+        setCelebration({
+          open: true,
+          type: "deposit",
+          amount: d.savings.currentBalance,
+          balance: d.savings.currentBalance,
+          reference: "WELCOME",
+        })
+      }, 600)
     } catch (err) {
       setLoginError(err instanceof Error ? err.message : "Login failed")
     } finally {
@@ -470,6 +496,16 @@ export default function MemberPortalPage() {
       <div className="text-center text-xs text-gray-400 py-4">
         Designed by NobTechWorld · WhatsApp: +256 760 399 849 · © {new Date().getFullYear()} KATAHO FARMERS&apos; SACCO
       </div>
+
+      <CelebrationPopup
+        open={celebration.open}
+        onClose={() => setCelebration((p) => ({ ...p, open: false }))}
+        type={celebration.type}
+        amount={celebration.amount}
+        balance={celebration.balance}
+        reference={celebration.reference}
+        charges={celebration.charges}
+      />
     </div>
   )
 }
