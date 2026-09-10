@@ -2,11 +2,6 @@
 
 import { useState, useCallback, useRef } from "react"
 import { User, Wallet, TrendingDown, TrendingUp, Landmark, PiggyBank, LogOut, Eye, EyeOff, Clock, CreditCard, CheckCircle, AlertCircle, Camera } from "lucide-react"
-import PageHeader from "@/components/ui/PageHeader"
-import Badge from "@/components/ui/Badge"
-import Button from "@/components/ui/Button"
-import Input from "@/components/ui/Input"
-import { MetricCard } from "@/components/ui/Card"
 import { formatUGX, formatDate } from "@/lib/utils"
 import CelebrationPopup from "@/components/ui/CelebrationPopup"
 
@@ -244,25 +239,37 @@ export default function MemberPortalPage() {
 
   if (!loggedIn || !data) {
     return (
-      <div className="min-h-[80vh] flex items-center justify-center">
-        <div className="w-full max-w-md">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl overflow-hidden">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-dark)] p-6 text-center">
-              <img src="/badge.jpg" alt="KAFS SACCO" className="inline-block w-20 h-20 rounded-full object-cover mb-3 border-4 border-white/20 shadow-lg" />
-              <h1 className="text-2xl font-bold text-white">Member Portal</h1>
-              <p className="text-white/70 mt-1 text-sm">Access your SACCO account</p>
-            </div>
+      <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-[#0a0e1a] -m-6 p-6">
+        {/* Animated background orbs */}
+        <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-[var(--color-primary)]/20 rounded-full blur-[120px] animate-pulse" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-[var(--color-gold)]/15 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: "1s" }} />
+        <div className="absolute top-[40%] left-[50%] w-[300px] h-[300px] bg-purple-500/10 rounded-full blur-[100px] animate-pulse" style={{ animationDelay: "2s" }} />
 
+        {/* Grid pattern */}
+        <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: "linear-gradient(rgba(255,255,255,.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.1) 1px, transparent 1px)", backgroundSize: "40px 40px" }} />
+
+        <div className="w-full max-w-md relative z-10">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <div className="relative inline-block mb-4">
+              <img src="/badge.jpg" alt="KAFS SACCO" className="w-24 h-24 rounded-full object-cover border-4 border-white/10 shadow-2xl" />
+              <div className="absolute inset-0 rounded-full bg-gradient-to-t from-[var(--color-primary)]/30 to-transparent" />
+            </div>
+            <h1 className="text-3xl font-bold text-white tracking-tight">Member <span className="text-[var(--color-gold)]">Portal</span></h1>
+            <p className="text-white/40 mt-1 text-sm tracking-wide">Access your SACCO account</p>
+          </div>
+
+          {/* Glass Card */}
+          <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-3xl shadow-2xl overflow-hidden">
             {/* Feature Pills */}
-            <div className="flex justify-center gap-2 px-6 pt-5">
+            <div className="flex justify-center gap-2 px-6 pt-6">
               {[
-                { icon: PiggyBank, label: "Savings", color: "bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400" },
-                { icon: Landmark, label: "Loans", color: "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400" },
-                { icon: TrendingUp, label: "Shares", color: "bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400" },
-                { icon: Wallet, label: "Fixed", color: "bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400" },
+                { icon: PiggyBank, label: "Savings", color: "border-green-500/20 text-green-400 bg-green-500/10" },
+                { icon: Landmark, label: "Loans", color: "border-blue-500/20 text-blue-400 bg-blue-500/10" },
+                { icon: TrendingUp, label: "Shares", color: "border-purple-500/20 text-purple-400 bg-purple-500/10" },
+                { icon: Wallet, label: "Fixed", color: "border-orange-500/20 text-orange-400 bg-orange-500/10" },
               ].map(({ icon: Icon, label, color }) => (
-                <div key={label} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${color}`}>
+                <div key={label} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${color}`}>
                   <Icon className="w-3.5 h-3.5" />
                   {label}
                 </div>
@@ -270,18 +277,18 @@ export default function MemberPortalPage() {
             </div>
 
             {/* Form */}
-            <div className="p-6">
+            <div className="p-6 pt-5">
               {loginError && (
-                <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm">
+                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm backdrop-blur-sm">
                   {loginError}
                 </div>
               )}
               <form onSubmit={handleLogin} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Member Code</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                      <Landmark className="w-4 h-4" />
+                  <label className="block text-sm font-medium text-white/50 mb-2 ml-1">Member Code</label>
+                  <div className="relative group">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 group-focus-within:text-[var(--color-gold)] transition-colors">
+                      <Landmark className="w-4.5 h-4.5" />
                     </span>
                     <input
                       type="text"
@@ -289,15 +296,15 @@ export default function MemberPortalPage() {
                       onChange={(e) => setMemberCode(e.target.value)}
                       placeholder="e.g. KAFS-001"
                       required
-                      className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent placeholder:text-gray-400 dark:placeholder:text-gray-500 transition-colors"
+                      className="w-full pl-11 pr-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white placeholder:text-white/25 focus:ring-2 focus:ring-[var(--color-gold)]/50 focus:border-[var(--color-gold)]/50 transition-all"
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Phone Number</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+                  <label className="block text-sm font-medium text-white/50 mb-2 ml-1">Phone Number</label>
+                  <div className="relative group">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 group-focus-within:text-[var(--color-gold)] transition-colors">
+                      <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
                     </span>
                     <input
                       type={showPassword ? "text" : "password"}
@@ -305,17 +312,17 @@ export default function MemberPortalPage() {
                       onChange={(e) => setPhoneNumber(e.target.value)}
                       placeholder="Enter your phone number"
                       required
-                      className="w-full pl-10 pr-10 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent placeholder:text-gray-400 dark:placeholder:text-gray-500 transition-colors"
+                      className="w-full pl-11 pr-12 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white placeholder:text-white/25 focus:ring-2 focus:ring-[var(--color-gold)]/50 focus:border-[var(--color-gold)]/50 transition-all"
                     />
-                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors">
+                      {showPassword ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
                     </button>
                   </div>
                 </div>
                 <button
                   type="submit"
                   disabled={loginLoading}
-                  className="w-full py-3 px-4 rounded-lg font-semibold text-white bg-gradient-to-r from-[var(--color-gold)] to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-[var(--color-gold)]/20"
+                  className="w-full py-3.5 px-4 rounded-xl font-semibold text-white bg-gradient-to-r from-[var(--color-gold)] to-yellow-600 hover:shadow-lg hover:shadow-[var(--color-gold)]/25 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 flex items-center justify-center gap-2 mt-2"
                 >
                   {loginLoading ? (
                     <>
@@ -330,11 +337,16 @@ export default function MemberPortalPage() {
                   )}
                 </button>
               </form>
-              <p className="text-center text-xs text-gray-400 dark:text-gray-500 mt-4">
+              <p className="text-center text-xs text-white/25 mt-4">
                 Contact the SACCO office if you forgot your credentials
               </p>
             </div>
           </div>
+
+          {/* Footer */}
+          <p className="text-center text-white/20 text-xs mt-6">
+            Designed by NobTechWorld &middot; &copy; {new Date().getFullYear()} KATAHO FARMERS&apos; SACCO
+          </p>
         </div>
       </div>
     )
@@ -344,340 +356,404 @@ export default function MemberPortalPage() {
   const totalAssetValue = data.savings.currentBalance + data.shares.shareValue + data.fixedAccounts.filter(f => f.status === "Active").reduce((s, f) => s + f.maturityAmount, 0)
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title={`Welcome, ${m.farmerName}`}
-        subtitle={`Member Code: ${m.memberCode}`}
-        actions={
-          <Button variant="outline" icon={<LogOut className="w-4 h-4" />} onClick={handleLogout}>Logout</Button>
-        }
-      />
+    <div className="min-h-screen bg-[#0a0e1a] -m-6 p-6 relative">
+      {/* Background orbs */}
+      <div className="fixed top-[-20%] left-[-10%] w-[500px] h-[500px] bg-[var(--color-primary)]/10 rounded-full blur-[120px] pointer-events-none" />
+      <div className="fixed bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-[var(--color-gold)]/10 rounded-full blur-[120px] pointer-events-none" />
 
-      <div className="flex gap-1 overflow-x-auto pb-1 border-b border-gray-200 dark:border-gray-800">
-        {tabs.map((tab) => {
-          const Icon = tab.icon
-          return (
-            <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors whitespace-nowrap ${
-                activeTab === tab.key ? "bg-[var(--color-primary)] text-white" : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
-              }`}>
-              <Icon className="w-4 h-4" />{tab.label}
-            </button>
-          )
-        })}
-      </div>
-
-      {activeTab === "overview" && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <MetricCard label="Savings Balance" value={formatUGX(data.savings.currentBalance)} icon={<PiggyBank className="w-5 h-5" />} />
-            <MetricCard label="Active Loans" value={`${data.loans.active} (${formatUGX(data.loans.totalBalance)})`} icon={<Landmark className="w-5 h-5" />} />
-            <MetricCard label="Total Shares" value={`${data.shares.totalShares} (${formatUGX(data.shares.shareValue)})`} icon={<TrendingUp className="w-5 h-5" />} />
-            <MetricCard label="Total Asset Value" value={formatUGX(totalAssetValue)} icon={<Wallet className="w-5 h-5" />} />
-          </div>
-
-          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm p-6">
-            <div className="flex items-start justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                <User className="w-5 h-5" />My Profile
-              </h3>
-              <div className="flex flex-col items-center gap-2">
-                {m.photoUrl ? (
-                  <img src={m.photoUrl} alt="Member photo" className="w-20 h-20 rounded-full object-cover border-2 border-[var(--color-primary)]" />
-                ) : (
-                  <div className="w-20 h-20 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center border-2 border-gray-300 dark:border-gray-600">
-                    <span className="text-2xl font-bold text-gray-400 dark:text-gray-500">
-                      {m.farmerName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()}
-                    </span>
-                  </div>
-                )}
-                <label className="cursor-pointer">
-                  <input type="file" accept="image/*" className="hidden" ref={photoInputRef} onChange={handlePhotoUpload} />
-                  <span className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-[var(--color-primary)] text-white hover:opacity-90 transition-opacity">
-                    <Camera className="w-3.5 h-3.5" />
-                    {photoUploading ? "Uploading..." : "Upload Photo"}
+      <div className="relative z-10 space-y-6">
+        {/* Header Card */}
+        <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-5 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="relative">
+              {m.photoUrl ? (
+                <img src={m.photoUrl} alt={m.farmerName} className="w-14 h-14 rounded-full object-cover border-2 border-[var(--color-gold)]/30" />
+              ) : (
+                <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[var(--color-primary)]/30 to-[var(--color-gold)]/30 border border-white/10 flex items-center justify-center">
+                  <span className="text-lg font-bold text-white/70">
+                    {m.farmerName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()}
                   </span>
-                </label>
-              </div>
+                </div>
+              )}
+              <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-green-500 rounded-full border-2 border-[#0a0e1a]" />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div>
+              <h1 className="text-lg font-bold text-white">{m.farmerName}</h1>
+              <p className="text-white/40 text-sm">{m.memberCode}</p>
+            </div>
+          </div>
+          <button onClick={handleLogout} className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white/50 hover:text-white hover:bg-white/[0.08] transition-all text-sm font-medium">
+            <LogOut className="w-4 h-4" />
+            Logout
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1.5 p-1.5 bg-white/[0.02] border border-white/[0.04] rounded-2xl overflow-x-auto">
+          {tabs.map((tab) => {
+            const Icon = tab.icon
+            return (
+              <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl transition-all whitespace-nowrap ${
+                  activeTab === tab.key
+                    ? "bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-dark)] text-white shadow-lg shadow-[var(--color-primary)]/20"
+                    : "text-white/35 hover:text-white/60 hover:bg-white/[0.03]"
+                }`}>
+                <Icon className="w-4 h-4" />{tab.label}
+              </button>
+            )
+          })}
+        </div>
+
+        {activeTab === "overview" && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               {[
-                { label: "Full Name", value: m.farmerName },
-                { label: "Gender", value: m.gender || "—" },
-                { label: "Phone", value: m.phoneNumber || "—" },
-                { label: "Email", value: m.email || "—" },
-                { label: "Village", value: m.village || "—" },
-                { label: "Parish", value: m.parish || "—" },
-                { label: "District", value: m.district || "—" },
-                { label: "Sub County", value: m.subCounty || "—" },
-                { label: "Occupation", value: m.occupation || "—" },
-                { label: "Main Produce", value: m.mainProduce || "—" },
-                { label: "Next of Kin", value: m.nextOfKinName || "—" },
-                { label: "Next of Kin Phone", value: m.nextOfKinPhone || "—" },
-                { label: "Registration Date", value: formatDate(m.registrationDate) },
-                { label: "Status", value: m.status || "Active" },
-              ].map((item) => (
-                <div key={item.label}>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">{item.label}</p>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">{item.value}</p>
+                { label: "Savings Balance", value: formatUGX(data.savings.currentBalance), icon: PiggyBank, color: "from-green-500/20 to-green-600/5 border-green-500/20" },
+                { label: "Active Loans", value: `${data.loans.active} (${formatUGX(data.loans.totalBalance)})`, icon: Landmark, color: "from-blue-500/20 to-blue-600/5 border-blue-500/20" },
+                { label: "Total Shares", value: `${data.shares.totalShares} (${formatUGX(data.shares.shareValue)})`, icon: TrendingUp, color: "from-purple-500/20 to-purple-600/5 border-purple-500/20" },
+                { label: "Asset Value", value: formatUGX(totalAssetValue), icon: Wallet, color: "from-orange-500/20 to-orange-600/5 border-orange-500/20" },
+              ].map(({ label, value, icon: Icon, color }) => (
+                <div key={label} className={`bg-gradient-to-b ${color} border rounded-2xl p-4`}>
+                  <Icon className="w-5 h-5 text-white/50 mb-3" />
+                  <p className="text-xs text-white/40 mb-1">{label}</p>
+                  <p className="text-sm font-bold text-white">{value}</p>
                 </div>
               ))}
             </div>
-          </div>
 
-          {data.recentTransactions.length > 0 && (
-            <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                <Clock className="w-5 h-5" />Recent Transactions
+            <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-6">
+              <h3 className="text-base font-semibold text-white mb-5 flex items-center gap-2">
+                <User className="w-4.5 h-4.5 text-[var(--color-gold)]" />My Profile
               </h3>
-              <div className="space-y-2">
-                {data.recentTransactions.slice(0, 10).map((t) => (
-                  <div key={t.id} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
-                    <div>
-                      <p className="text-sm font-medium">{t.transactionType}</p>
-                      <p className="text-xs text-gray-500">{t.referenceNumber} • {formatDate(t.transactionDate)}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className={`text-sm font-bold ${t.transactionType === "Deposit" ? "text-green-600" : "text-red-600"}`}>
-                        {t.transactionType === "Deposit" ? "+" : "-"}{formatUGX(t.amount)}
-                      </p>
-                      <p className="text-xs text-gray-500">Bal: {formatUGX(t.balanceAfter)}</p>
-                    </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                {[
+                  { label: "Full Name", value: m.farmerName },
+                  { label: "Gender", value: m.gender || "—" },
+                  { label: "Phone", value: m.phoneNumber || "—" },
+                  { label: "Email", value: m.email || "—" },
+                  { label: "Village", value: m.village || "—" },
+                  { label: "Parish", value: m.parish || "—" },
+                  { label: "District", value: m.district || "—" },
+                  { label: "Sub County", value: m.subCounty || "—" },
+                  { label: "Occupation", value: m.occupation || "—" },
+                  { label: "Main Produce", value: m.mainProduce || "—" },
+                  { label: "Next of Kin", value: m.nextOfKinName || "—" },
+                  { label: "Next of Kin Phone", value: m.nextOfKinPhone || "—" },
+                  { label: "Registered", value: formatDate(m.registrationDate) },
+                  { label: "Status", value: m.status || "Active" },
+                ].map((item) => (
+                  <div key={item.label}>
+                    <p className="text-[11px] text-white/30 uppercase tracking-wider mb-0.5">{item.label}</p>
+                    <p className="text-sm font-medium text-white/80">{item.value}</p>
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {activeTab === "savings" && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <MetricCard label="Current Balance" value={formatUGX(data.savings.currentBalance)} icon={<PiggyBank className="w-5 h-5" />} />
-            <MetricCard label="Total Deposits" value={formatUGX(data.savings.totalDeposits)} icon={<TrendingUp className="w-5 h-5" />} />
-            <MetricCard label="Total Withdrawals" value={formatUGX(data.savings.totalWithdrawals)} icon={<TrendingDown className="w-5 h-5" />} />
-          </div>
-          <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm p-6">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Transaction History</h3>
-            <div className="space-y-2">
-              {data.recentTransactions.length === 0 ? (
-                <p className="text-gray-500 text-center py-4">No transactions yet</p>
-              ) : (
-                data.recentTransactions.map((t) => (
-                  <div key={t.id} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
-                    <div>
-                      <p className="text-sm font-medium">{t.transactionType}</p>
-                      <p className="text-xs text-gray-500">{t.referenceNumber} • {formatDate(t.transactionDate)}</p>
-                      {t.narration && <p className="text-xs text-gray-400">{t.narration}</p>}
-                    </div>
-                    <div className="text-right">
-                      <p className={`text-sm font-bold ${t.transactionType === "Deposit" ? "text-green-600" : "text-red-600"}`}>
-                        {t.transactionType === "Deposit" ? "+" : "-"}{formatUGX(t.amount)}
-                      </p>
-                      <p className="text-xs text-gray-500">Bal: {formatUGX(t.balanceAfter)}</p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeTab === "loans" && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <MetricCard label="Total Loans" value={String(data.loans.total)} icon={<Landmark className="w-5 h-5" />} />
-            <MetricCard label="Active Loans" value={String(data.loans.active)} icon={<TrendingDown className="w-5 h-5" />} />
-            <MetricCard label="Outstanding Balance" value={formatUGX(data.loans.totalBalance)} icon={<Wallet className="w-5 h-5" />} />
-          </div>
-
-          {data.loans.list.length === 0 ? (
-            <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm p-8 text-center">
-              <Landmark className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
-              <p className="text-gray-500">No loans found</p>
-            </div>
-          ) : (
-            data.loans.list.map((loan) => {
-              const paidAmount = loan.principalAmount - loan.currentBalance
-              const paidPercent = loan.principalAmount > 0 ? (paidAmount / loan.principalAmount) * 100 : 0
-              return (
-                <div key={loan.id} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h4 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                        {loan.loanCode}
-                        <Badge variant={loan.loanStatus === "Active" ? "warning" : loan.loanStatus === "Cleared" ? "success" : "default"}>
-                          {loan.loanStatus}
-                        </Badge>
-                      </h4>
-                      <p className="text-sm text-gray-500">Disbursed: {formatDate(loan.disbursementDate)}</p>
-                    </div>
-                    {loan.loanStatus === "Active" && (
-                      <Button size="sm" icon={<CreditCard className="w-4 h-4" />}
-                        onClick={() => { setSelectedLoanId(loan.id); setPayLoanOpen(true); setPayAmount(""); setPayError("") }}>
-                        Pay Loan
-                      </Button>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
-                    <div>
-                      <p className="text-xs text-gray-500">Principal</p>
-                      <p className="text-sm font-semibold">{formatUGX(loan.principalAmount)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Outstanding</p>
-                      <p className="text-sm font-semibold text-red-600">{formatUGX(loan.currentBalance)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Interest Rate</p>
-                      <p className="text-sm font-semibold">{loan.interestRate}% p.a.</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Due Date</p>
-                      <p className="text-sm font-semibold">{loan.dueDate ? formatDate(loan.dueDate) : "—"}</p>
-                    </div>
-                  </div>
-
-                  <div className="mb-2">
-                    <div className="flex justify-between text-xs text-gray-500 mb-1">
-                      <span>Repayment Progress</span>
-                      <span>{paidPercent.toFixed(1)}% paid</span>
-                    </div>
-                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
-                      <div className="bg-green-500 h-2.5 rounded-full transition-all duration-500" style={{ width: `${Math.min(paidPercent, 100)}%` }} />
-                    </div>
-                    <p className="text-xs text-gray-400 mt-1">Paid: {formatUGX(paidAmount)} of {formatUGX(loan.principalAmount)}</p>
-                  </div>
-                </div>
-              )
-            })
-          )}
-
-          {data.loanRepayments.length > 0 && (
-            <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Repayment History</h3>
-              <div className="space-y-2">
-                {data.loanRepayments.map((r) => (
-                  <div key={r.id} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
-                    <div>
-                      <p className="text-sm font-medium">Repayment — {r.loan.loanCode}</p>
-                      <p className="text-xs text-gray-500">{r.referenceNumber} • {formatDate(r.paymentDate)}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-bold text-green-600">+{formatUGX(r.amountPaid)}</p>
-                      {r.finePaid > 0 && <p className="text-xs text-orange-500">Fine: {formatUGX(r.finePaid)}</p>}
-                      <p className="text-xs text-gray-500">Bal: {formatUGX(r.balanceAfter)}</p>
-                    </div>
-                  </div>
-                ))}
+              <div className="mt-5 pt-4 border-t border-white/[0.06]">
+                <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--color-gold)]/10 border border-[var(--color-gold)]/20 text-[var(--color-gold)] hover:bg-[var(--color-gold)]/20 transition-all text-sm font-medium">
+                  <input type="file" accept="image/*" className="hidden" ref={photoInputRef} onChange={handlePhotoUpload} />
+                  <Camera className="w-4 h-4" />
+                  {photoUploading ? "Uploading..." : "Upload Photo"}
+                </label>
               </div>
             </div>
-          )}
-        </div>
-      )}
 
-      {activeTab === "shares" && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <MetricCard label="Total Shares" value={String(data.shares.totalShares)} icon={<TrendingUp className="w-5 h-5" />} />
-            <MetricCard label="Share Value" value={formatUGX(data.shares.shareValue)} icon={<Wallet className="w-5 h-5" />} />
-          </div>
-          {data.shares.list.length > 0 && (
-            <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Share Transactions</h3>
-              <div className="space-y-2">
-                {data.shares.list.map((s) => (
-                  <div key={s.id} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
-                    <div>
-                      <p className="text-sm font-medium">{s.transactionType} — {s.sharesQuantity} shares</p>
-                      <p className="text-xs text-gray-500">{s.referenceNumber} • {formatDate(s.transactionDate)}</p>
+            {data.recentTransactions.length > 0 && (
+              <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-6">
+                <h3 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
+                  <Clock className="w-4.5 h-4.5 text-[var(--color-gold)]" />Recent Transactions
+                </h3>
+                <div className="space-y-2">
+                  {data.recentTransactions.slice(0, 10).map((t) => (
+                    <div key={t.id} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.04] hover:bg-white/[0.05] transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.transactionType === "Deposit" ? "bg-green-500/10" : "bg-red-500/10"}`}>
+                          {t.transactionType === "Deposit" ? <TrendingUp className="w-4 h-4 text-green-400" /> : <TrendingDown className="w-4 h-4 text-red-400" />}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-white/80">{t.transactionType}</p>
+                          <p className="text-[11px] text-white/30">{t.referenceNumber} • {formatDate(t.transactionDate)}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-sm font-bold ${t.transactionType === "Deposit" ? "text-green-400" : "text-red-400"}`}>
+                          {t.transactionType === "Deposit" ? "+" : "-"}{formatUGX(t.amount)}
+                        </p>
+                        <p className="text-[11px] text-white/25">Bal: {formatUGX(t.balanceAfter)}</p>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-bold">{formatUGX(s.totalAmount)}</p>
-                      <p className="text-xs text-gray-500">@ {formatUGX(s.sharePrice)}/share</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {activeTab === "fixed" && (
-        <div className="space-y-6">
-          {data.fixedAccounts.length === 0 ? (
-            <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm p-8 text-center">
-              <Wallet className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
-              <p className="text-gray-500">No fixed deposits found</p>
-            </div>
-          ) : (
-            data.fixedAccounts.map((fa) => (
-              <div key={fa.id} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h4 className="text-lg font-semibold text-gray-900 dark:text-white">{fa.fixedCode}</h4>
-                    <p className="text-sm text-gray-500">Started: {formatDate(fa.startDate)}</p>
-                  </div>
-                  <Badge variant={fa.status === "Active" ? "warning" : fa.status === "Matured" ? "success" : "default"}>{fa.status}</Badge>
+                  ))}
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <div><p className="text-xs text-gray-500">Principal</p><p className="text-sm font-semibold">{formatUGX(fa.principalAmount)}</p></div>
-                  <div><p className="text-xs text-gray-500">Interest Rate</p><p className="text-sm font-semibold">{fa.interestRate}%</p></div>
-                  <div><p className="text-xs text-gray-500">Interest Earned</p><p className="text-sm font-semibold text-green-600">{formatUGX(fa.interestEarned)}</p></div>
-                  <div><p className="text-xs text-gray-500">Maturity Amount</p><p className="text-sm font-bold text-[var(--color-primary)]">{formatUGX(fa.maturityAmount)}</p></div>
-                </div>
-                <div className="mt-3 text-xs text-gray-500">Maturity Date: {formatDate(fa.maturityDate)}</div>
-              </div>
-            ))
-          )}
-        </div>
-      )}
-
-      {payLoanOpen && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setPayLoanOpen(false)} />
-          <div className="relative w-full max-w-md bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-6">
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-              <CreditCard className="w-5 h-5" />Pay Loan
-            </h3>
-            {payError && (
-              <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm flex items-center gap-2">
-                <AlertCircle className="w-4 h-4" />{payError}
               </div>
             )}
-            {(() => {
-              const loan = data.loans.list.find(l => l.id === selectedLoanId)
-              if (!loan) return null
-              return (
-                <div className="mb-4 p-3 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
-                  <p className="text-sm font-medium">{loan.loanCode}</p>
-                  <p className="text-xs text-gray-500">Outstanding: <span className="font-semibold text-red-600">{formatUGX(loan.currentBalance)}</span></p>
+          </div>
+        )}
+
+        {activeTab === "savings" && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { label: "Current Balance", value: formatUGX(data.savings.currentBalance), icon: PiggyBank, color: "from-green-500/20 to-green-600/5 border-green-500/20" },
+                { label: "Total Deposits", value: formatUGX(data.savings.totalDeposits), icon: TrendingUp, color: "from-blue-500/20 to-blue-600/5 border-blue-500/20" },
+                { label: "Total Withdrawals", value: formatUGX(data.savings.totalWithdrawals), icon: TrendingDown, color: "from-red-500/20 to-red-600/5 border-red-500/20" },
+              ].map(({ label, value, icon: Icon, color }) => (
+                <div key={label} className={`bg-gradient-to-b ${color} border rounded-2xl p-4`}>
+                  <Icon className="w-5 h-5 text-white/50 mb-3" />
+                  <p className="text-xs text-white/40 mb-1">{label}</p>
+                  <p className="text-sm font-bold text-white">{value}</p>
                 </div>
-              )
-            })()}
-            <Input label="Amount (UGX)" type="number" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder="Enter amount" min="1" />
-            <div className="flex justify-end gap-3 mt-4">
-              <Button variant="ghost" onClick={() => setPayLoanOpen(false)}>Cancel</Button>
-              <Button loading={payLoading} onClick={handlePayLoan} icon={<CheckCircle className="w-4 h-4" />}>Submit Payment</Button>
+              ))}
+            </div>
+            <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-6">
+              <h3 className="text-base font-semibold text-white mb-4">Transaction History</h3>
+              <div className="space-y-2">
+                {data.recentTransactions.length === 0 ? (
+                  <p className="text-white/30 text-center py-8">No transactions yet</p>
+                ) : (
+                  data.recentTransactions.map((t) => (
+                    <div key={t.id} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.04]">
+                      <div>
+                        <p className="text-sm font-medium text-white/80">{t.transactionType}</p>
+                        <p className="text-[11px] text-white/30">{t.referenceNumber} • {formatDate(t.transactionDate)}</p>
+                        {t.narration && <p className="text-[11px] text-white/20">{t.narration}</p>}
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-sm font-bold ${t.transactionType === "Deposit" ? "text-green-400" : "text-red-400"}`}>
+                          {t.transactionType === "Deposit" ? "+" : "-"}{formatUGX(t.amount)}
+                        </p>
+                        <p className="text-[11px] text-white/25">Bal: {formatUGX(t.balanceAfter)}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <CelebrationPopup
-        open={celebration.open}
-        onClose={() => setCelebration((p) => ({ ...p, open: false }))}
-        type={celebration.type}
-        amount={celebration.amount}
-        balance={celebration.balance}
-        reference={celebration.reference}
-        charges={celebration.charges}
-        message={celebration.message}
-      />
+        {activeTab === "loans" && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { label: "Total Loans", value: String(data.loans.total), icon: Landmark, color: "from-blue-500/20 to-blue-600/5 border-blue-500/20" },
+                { label: "Active Loans", value: String(data.loans.active), icon: TrendingDown, color: "from-orange-500/20 to-orange-600/5 border-orange-500/20" },
+                { label: "Outstanding", value: formatUGX(data.loans.totalBalance), icon: Wallet, color: "from-red-500/20 to-red-600/5 border-red-500/20" },
+              ].map(({ label, value, icon: Icon, color }) => (
+                <div key={label} className={`bg-gradient-to-b ${color} border rounded-2xl p-4`}>
+                  <Icon className="w-5 h-5 text-white/50 mb-3" />
+                  <p className="text-xs text-white/40 mb-1">{label}</p>
+                  <p className="text-sm font-bold text-white">{value}</p>
+                </div>
+              ))}
+            </div>
+
+            {data.loans.list.length === 0 ? (
+              <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-10 text-center">
+                <Landmark className="w-12 h-12 mx-auto text-white/15 mb-3" />
+                <p className="text-white/30">No loans found</p>
+              </div>
+            ) : (
+              data.loans.list.map((loan) => {
+                const paidAmount = loan.principalAmount - loan.currentBalance
+                const paidPercent = loan.principalAmount > 0 ? (paidAmount / loan.principalAmount) * 100 : 0
+                return (
+                  <div key={loan.id} className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h4 className="text-base font-semibold text-white flex items-center gap-2">
+                          {loan.loanCode}
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${loan.loanStatus === "Active" ? "bg-yellow-500/15 text-yellow-400 border border-yellow-500/20" : loan.loanStatus === "Cleared" ? "bg-green-500/15 text-green-400 border border-green-500/20" : "bg-white/10 text-white/50 border border-white/10"}`}>
+                            {loan.loanStatus}
+                          </span>
+                        </h4>
+                        <p className="text-[11px] text-white/30 mt-1">Disbursed: {formatDate(loan.disbursementDate)}</p>
+                      </div>
+                      {loan.loanStatus === "Active" && (
+                        <button onClick={() => { setSelectedLoanId(loan.id); setPayLoanOpen(true); setPayAmount(""); setPayError("") }}
+                          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-[var(--color-gold)] to-yellow-600 text-white text-sm font-semibold hover:shadow-lg hover:shadow-[var(--color-gold)]/20 transition-all">
+                          <CreditCard className="w-4 h-4" /> Pay
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-4 gap-4 mb-4">
+                      {[
+                        { label: "Principal", value: formatUGX(loan.principalAmount) },
+                        { label: "Outstanding", value: formatUGX(loan.currentBalance), className: "text-red-400" },
+                        { label: "Rate", value: `${loan.interestRate}% p.a.` },
+                        { label: "Due Date", value: loan.dueDate ? formatDate(loan.dueDate) : "—" },
+                      ].map((item) => (
+                        <div key={item.label}>
+                          <p className="text-[10px] text-white/30 uppercase tracking-wider mb-0.5">{item.label}</p>
+                          <p className={`text-sm font-semibold ${item.className || "text-white/80"}`}>{item.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-[11px] text-white/30 mb-1.5">
+                        <span>Repayment Progress</span>
+                        <span>{paidPercent.toFixed(1)}%</span>
+                      </div>
+                      <div className="w-full bg-white/[0.06] rounded-full h-2">
+                        <div className="bg-gradient-to-r from-green-500 to-emerald-400 h-2 rounded-full transition-all duration-500" style={{ width: `${Math.min(paidPercent, 100)}%` }} />
+                      </div>
+                      <p className="text-[11px] text-white/20 mt-1">Paid: {formatUGX(paidAmount)} of {formatUGX(loan.principalAmount)}</p>
+                    </div>
+                  </div>
+                )
+              })
+            )}
+
+            {data.loanRepayments.length > 0 && (
+              <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-6">
+                <h3 className="text-base font-semibold text-white mb-4">Repayment History</h3>
+                <div className="space-y-2">
+                  {data.loanRepayments.map((r) => (
+                    <div key={r.id} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.04]">
+                      <div>
+                        <p className="text-sm font-medium text-white/80">Repayment — {r.loan.loanCode}</p>
+                        <p className="text-[11px] text-white/30">{r.referenceNumber} • {formatDate(r.paymentDate)}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-bold text-green-400">+{formatUGX(r.amountPaid)}</p>
+                        {r.finePaid > 0 && <p className="text-[11px] text-orange-400">Fine: {formatUGX(r.finePaid)}</p>}
+                        <p className="text-[11px] text-white/25">Bal: {formatUGX(r.balanceAfter)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "shares" && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: "Total Shares", value: String(data.shares.totalShares), icon: TrendingUp, color: "from-purple-500/20 to-purple-600/5 border-purple-500/20" },
+                { label: "Share Value", value: formatUGX(data.shares.shareValue), icon: Wallet, color: "from-green-500/20 to-green-600/5 border-green-500/20" },
+              ].map(({ label, value, icon: Icon, color }) => (
+                <div key={label} className={`bg-gradient-to-b ${color} border rounded-2xl p-4`}>
+                  <Icon className="w-5 h-5 text-white/50 mb-3" />
+                  <p className="text-xs text-white/40 mb-1">{label}</p>
+                  <p className="text-sm font-bold text-white">{value}</p>
+                </div>
+              ))}
+            </div>
+            {data.shares.list.length > 0 && (
+              <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-6">
+                <h3 className="text-base font-semibold text-white mb-4">Share Transactions</h3>
+                <div className="space-y-2">
+                  {data.shares.list.map((s) => (
+                    <div key={s.id} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.04]">
+                      <div>
+                        <p className="text-sm font-medium text-white/80">{s.transactionType} — {s.sharesQuantity} shares</p>
+                        <p className="text-[11px] text-white/30">{s.referenceNumber} • {formatDate(s.transactionDate)}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-bold text-white/80">{formatUGX(s.totalAmount)}</p>
+                        <p className="text-[11px] text-white/25">@ {formatUGX(s.sharePrice)}/share</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "fixed" && (
+          <div className="space-y-6">
+            {data.fixedAccounts.length === 0 ? (
+              <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-10 text-center">
+                <Wallet className="w-12 h-12 mx-auto text-white/15 mb-3" />
+                <p className="text-white/30">No fixed deposits found</p>
+              </div>
+            ) : (
+              data.fixedAccounts.map((fa) => (
+                <div key={fa.id} className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h4 className="text-base font-semibold text-white">{fa.fixedCode}</h4>
+                      <p className="text-[11px] text-white/30 mt-1">Started: {formatDate(fa.startDate)}</p>
+                    </div>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold ${fa.status === "Active" ? "bg-yellow-500/15 text-yellow-400 border border-yellow-500/20" : fa.status === "Matured" ? "bg-green-500/15 text-green-400 border border-green-500/20" : "bg-white/10 text-white/50 border border-white/10"}`}>
+                      {fa.status}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-4">
+                    {[
+                      { label: "Principal", value: formatUGX(fa.principalAmount) },
+                      { label: "Rate", value: `${fa.interestRate}%` },
+                      { label: "Interest", value: formatUGX(fa.interestEarned), className: "text-green-400" },
+                      { label: "Maturity", value: formatUGX(fa.maturityAmount), className: "text-[var(--color-gold)]" },
+                    ].map((item) => (
+                      <div key={item.label}>
+                        <p className="text-[10px] text-white/30 uppercase tracking-wider mb-0.5">{item.label}</p>
+                        <p className={`text-sm font-semibold ${item.className || "text-white/80"}`}>{item.value}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-white/[0.04] text-[11px] text-white/25">
+                    Maturity Date: {formatDate(fa.maturityDate)}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* Pay Loan Modal */}
+        {payLoanOpen && (
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setPayLoanOpen(false)} />
+            <div className="relative w-full max-w-md bg-[#12172a] border border-white/[0.08] rounded-2xl shadow-2xl p-6">
+              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-[var(--color-gold)]" />Pay Loan
+              </h3>
+              {payError && (
+                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4" />{payError}
+                </div>
+              )}
+              {(() => {
+                const loan = data.loans.list.find(l => l.id === selectedLoanId)
+                if (!loan) return null
+                return (
+                  <div className="mb-4 p-3 rounded-xl bg-white/[0.04] border border-white/[0.06]">
+                    <p className="text-sm font-medium text-white">{loan.loanCode}</p>
+                    <p className="text-[11px] text-white/30">Outstanding: <span className="font-semibold text-red-400">{formatUGX(loan.currentBalance)}</span></p>
+                  </div>
+                )
+              })()}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-white/50 mb-2 ml-1">Amount (UGX)</label>
+                <input type="number" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder="Enter amount" min="1"
+                  className="w-full px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white placeholder:text-white/25 focus:ring-2 focus:ring-[var(--color-gold)]/50 focus:border-[var(--color-gold)]/50 transition-all" />
+              </div>
+              <div className="flex justify-end gap-3">
+                <button onClick={() => setPayLoanOpen(false)} className="px-4 py-2.5 rounded-xl text-white/40 hover:text-white/70 transition-colors text-sm font-medium">Cancel</button>
+                <button disabled={payLoading} onClick={handlePayLoan}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-[var(--color-gold)] to-yellow-600 text-white text-sm font-semibold hover:shadow-lg hover:shadow-[var(--color-gold)]/20 disabled:opacity-50 transition-all">
+                  {payLoading ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                  Submit
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <CelebrationPopup
+          open={celebration.open}
+          onClose={() => setCelebration((p) => ({ ...p, open: false }))}
+          type={celebration.type}
+          amount={celebration.amount}
+          balance={celebration.balance}
+          reference={celebration.reference}
+          charges={celebration.charges}
+          message={celebration.message}
+        />
+      </div>
     </div>
   )
 }
