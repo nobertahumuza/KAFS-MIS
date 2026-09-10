@@ -22,6 +22,12 @@ export const SIDEBAR_NAV = [
   { icon: 'BookOpen', label: 'Chart of Accounts', href: '/chart-of-accounts', roles: [ROLES.ADMIN, ROLES.TREASURER] },
   { icon: 'FileText', label: 'Journal Entries', href: '/journal-entries', roles: [ROLES.ADMIN, ROLES.TREASURER] },
   { icon: 'BarChart3', label: 'Reports', href: '/reports', roles: [ROLES.ADMIN, ROLES.TREASURER] },
+  { icon: 'Activity', label: 'Cash Flow', href: '/reports/cashflow', roles: [ROLES.ADMIN, ROLES.TREASURER] },
+  { icon: 'TrendingUp', label: 'Trends', href: '/reports/trends', roles: [ROLES.ADMIN, ROLES.TREASURER] },
+  { icon: 'AlertTriangle', label: 'Delinquency', href: '/reports/delinquency', roles: [ROLES.ADMIN, ROLES.LOANS_OFFICER] },
+  { icon: 'PieChart', label: 'Budget', href: '/reports/budget', roles: [ROLES.ADMIN, ROLES.TREASURER] },
+  { icon: 'Calendar', label: 'Year End', href: '/reports/year-end', roles: [ROLES.ADMIN] },
+  { icon: 'FileText', label: 'Statements', href: '/reports/statement', roles: [ROLES.ADMIN, ROLES.CASHIER] },
   { icon: 'MessageSquare', label: 'SMS', href: '/sms', roles: [ROLES.ADMIN, ROLES.CASHIER] },
   { icon: 'Settings', label: 'Settings', href: '/settings', roles: [ROLES.ADMIN] },
 ] as const

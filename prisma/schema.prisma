@@ -33,6 +33,9 @@ model User {
   loanRepayments       LoanRepayment[]
   savingsEntries       SavingsLedger[]
   smsSent              SmsLog[]
+  documentsUploaded    MemberDocument[]
+  budgetsCreated       Budget[]
+  fiscalYearsClosed    FiscalYear[]
 
   @@map("users")
 }
@@ -60,6 +63,9 @@ model Member {
   shareValue       Float?   @default(0) @map("share_value")
   registrationDate DateTime @map("registration_date")
   status           String?  @default("Active")
+  photoUrl         String?  @map("photo_url")
+  activityScore    Float?   @default(0) @map("activity_score")
+  creditScore      Float?   @default(50) @map("credit_score")
   createdAt        DateTime @default(now()) @map("created_at")
 
   accounts              Customer[]
@@ -72,6 +78,8 @@ model Member {
   fixedAccounts         FixedAccount[]
   loanGuarantors        LoanGuarantor[]
   expenses              Expense[]
+  documents             MemberDocument[]
+  savingsInterest       SavingsInterest[]
 
   @@map("members")
 }
@@ -286,6 +294,7 @@ model Loan {
   fines             LoanFine[]
   repaymentSchedules LoanRepaymentSchedule[]
   repayments        LoanRepayment[]
+  loanInterest      LoanInterest[]
 
   @@map("loans")
 }
@@ -700,4 +709,80 @@ model SmsTemplate {
   updatedAt   DateTime @default(now()) @map("updated_at")
 
   @@map("sms_templates")
+}
+
+model MemberDocument {
+  id          Int      @id @default(autoincrement())
+  memberId    Int      @map("member_id")
+  docType     String   @map("doc_type")
+  docName     String   @map("doc_name")
+  fileUrl     String   @map("file_url")
+  fileSize    Int?     @map("file_size")
+  mimeType    String?  @map("mime_type")
+  uploadedBy  Int?     @map("uploaded_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  member   Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  uploader User?  @relation(fields: [uploadedBy], references: [id], onDelete: SetNull)
+
+  @@map("member_documents")
+}
+
+model Budget {
+  id          Int      @id @default(autoincrement())
+  category    String
+  amount      Float
+  fiscalYear  Int      @map("fiscal_year")
+  period      String   @default("Annual")
+  notes       String?
+  createdBy   Int?     @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  creator User? @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@map("budgets")
+}
+
+model FiscalYear {
+  id          Int      @id @default(autoincrement())
+  year        Int      @unique
+  startDate   DateTime @map("start_date")
+  endDate     DateTime @map("end_date")
+  status      String   @default("Active")
+  closedAt    DateTime? @map("closed_at")
+  closedBy    Int?      @map("closed_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  closer User? @relation(fields: [closedBy], references: [id], onDelete: SetNull)
+
+  @@map("fiscal_years")
+}
+
+model SavingsInterest {
+  id            Int      @id @default(autoincrement())
+  memberId      Int      @map("member_id")
+  period        String
+  interestRate  Float    @map("interest_rate")
+  balance       Float
+  interestEarned Float   @map("interest_earned")
+  creditedAt    DateTime @default(now()) @map("credited_at")
+  fiscalYear    Int?     @map("fiscal_year")
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@map("savings_interest")
+}
+
+model LoanInterest {
+  id            Int      @id @default(autoincrement())
+  loanId        Int      @map("loan_id")
+  period        String
+  interestRate  Float    @map("interest_rate")
+  principalBalance Float @map("principal_balance")
+  interestAmount Float   @map("interest_amount")
+  calculatedAt  DateTime @default(now()) @map("calculated_at")
+
+  loan Loan @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  @@map("loan_interest")
 }

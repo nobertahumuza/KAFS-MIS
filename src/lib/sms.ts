@@ -205,3 +205,13 @@ export async function smsExpense(memberId: number, category: string, description
     time: now(),
   }, "Expense")
 }
+
+export async function smsLoanFine(memberId: number, loanCode: string, fineAmount: number, overdueDays: number, dueDate: string) {
+  await sendToMember("loan_fine", memberId, {
+    loan_code: loanCode,
+    fine_amount: fineAmount.toLocaleString(),
+    overdue_days: String(overdueDays),
+    due_date: dueDate,
+    time: now(),
+  }, "Loan Fine")
+}

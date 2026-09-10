@@ -2,7 +2,7 @@
 
 import { useState, useEffect, use } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Save, Wallet, PiggyBank, HandCoins, TrendingUp } from "lucide-react"
+import { ArrowLeft, Save, Wallet, PiggyBank, HandCoins, TrendingUp, User } from "lucide-react"
 import PageHeader from "@/components/ui/PageHeader"
 import Input from "@/components/ui/Input"
 import Select from "@/components/ui/Select"
@@ -36,6 +36,7 @@ interface MemberData {
   totalWithdrawals: number
   activeLoans: number
   totalShares: number
+  photoUrl?: string | null
 }
 
 export default function EditMemberPage({ params }: { params: Promise<{ id: string }> }) {
@@ -186,6 +187,28 @@ export default function EditMemberPage({ params }: { params: Promise<{ id: strin
 
           {member && (
             <>
+              <div className="flex items-center gap-6 p-4 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+                <div className="flex-shrink-0">
+                  {member.photoUrl ? (
+                    <img src={member.photoUrl} alt="Member photo" className="w-24 h-24 rounded-full object-cover border-2 border-[var(--color-primary)]" />
+                  ) : (
+                    <div className="w-24 h-24 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center border-2 border-gray-300 dark:border-gray-600">
+                      <span className="text-3xl font-bold text-gray-400 dark:text-gray-500">
+                        {member.farmerName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase">Member Photo</p>
+                  {member.photoUrl ? (
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Photo uploaded by member via portal</p>
+                  ) : (
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">No photo uploaded yet</p>
+                  )}
+                </div>
+              </div>
+
               <div className="flex items-center gap-3 p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
                 <div>
                   <p className="text-xs text-blue-600 dark:text-blue-400 font-medium uppercase">Member Code</p>

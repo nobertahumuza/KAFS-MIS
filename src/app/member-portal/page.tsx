@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
-import { User, Wallet, TrendingDown, TrendingUp, Landmark, PiggyBank, LogOut, Eye, EyeOff, Clock, CreditCard, CheckCircle, AlertCircle } from "lucide-react"
+import { useState, useCallback, useRef } from "react"
+import { User, Wallet, TrendingDown, TrendingUp, Landmark, PiggyBank, LogOut, Eye, EyeOff, Clock, CreditCard, CheckCircle, AlertCircle, Camera } from "lucide-react"
 import PageHeader from "@/components/ui/PageHeader"
 import Badge from "@/components/ui/Badge"
 import Button from "@/components/ui/Button"
@@ -30,6 +30,7 @@ interface MemberData {
     shareValue: number | null
     registrationDate: string
     status: string | null
+    photoUrl?: string | null
   }
   savings: { currentBalance: number; totalDeposits: number; totalWithdrawals: number }
   loans: {
@@ -110,6 +111,41 @@ export default function MemberPortalPage() {
   const [payAmount, setPayAmount] = useState("")
   const [payError, setPayError] = useState("")
   const [payLoading, setPayLoading] = useState(false)
+
+  const [photoUploading, setPhotoUploading] = useState(false)
+  const photoInputRef = useRef<HTMLInputElement>(null)
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !data) return
+    setPhotoUploading(true)
+    try {
+      const reader = new FileReader()
+      const base64 = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string)
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+      const res = await fetch(`/api/members/${data.member.id}/photo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photo: base64 }),
+      })
+      if (!res.ok) throw new Error("Upload failed")
+      setData({ ...data, member: { ...data.member, photoUrl: base64 } })
+      setCelebration({
+        open: true,
+        type: "deposit",
+        amount: 0,
+        reference: "PHOTO",
+        message: "Your photo has been uploaded successfully!",
+      })
+    } catch {
+      setPayError("Failed to upload photo")
+    } finally {
+      setPhotoUploading(false)
+    }
+  }
 
   const fetchMemberData = useCallback(async (code: string, phone: string) => {
     const res = await fetch("/api/member-portal", {
@@ -281,9 +317,29 @@ export default function MemberPortalPage() {
           </div>
 
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm p-6">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-              <User className="w-5 h-5" />My Profile
-            </h3>
+            <div className="flex items-start justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <User className="w-5 h-5" />My Profile
+              </h3>
+              <div className="flex flex-col items-center gap-2">
+                {m.photoUrl ? (
+                  <img src={m.photoUrl} alt="Member photo" className="w-20 h-20 rounded-full object-cover border-2 border-[var(--color-primary)]" />
+                ) : (
+                  <div className="w-20 h-20 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center border-2 border-gray-300 dark:border-gray-600">
+                    <span className="text-2xl font-bold text-gray-400 dark:text-gray-500">
+                      {m.farmerName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()}
+                    </span>
+                  </div>
+                )}
+                <label className="cursor-pointer">
+                  <input type="file" accept="image/*" className="hidden" ref={photoInputRef} onChange={handlePhotoUpload} />
+                  <span className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-[var(--color-primary)] text-white hover:opacity-90 transition-opacity">
+                    <Camera className="w-3.5 h-3.5" />
+                    {photoUploading ? "Uploading..." : "Upload Photo"}
+                  </span>
+                </label>
+              </div>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {[
                 { label: "Full Name", value: m.farmerName },
