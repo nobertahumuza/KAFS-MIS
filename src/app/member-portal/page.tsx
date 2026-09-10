@@ -4,6 +4,7 @@ import { useState, useCallback, useRef } from "react"
 import { User, Wallet, TrendingDown, TrendingUp, Landmark, PiggyBank, LogOut, Eye, EyeOff, Clock, CreditCard, CheckCircle, AlertCircle, Camera } from "lucide-react"
 import { formatUGX, formatDate } from "@/lib/utils"
 import CelebrationPopup from "@/components/ui/CelebrationPopup"
+import Footer from "@/components/layout/Footer"
 
 interface MemberData {
   member: {
@@ -343,12 +344,9 @@ export default function MemberPortalPage() {
             </div>
           </div>
 
-          {/* Footer */}
-          <p className="text-center text-white/20 text-xs mt-6">
-            Designed by NobTechWorld &middot; &copy; {new Date().getFullYear()} KATAHO FARMERS&apos; SACCO
-          </p>
-        </div>
+          <Footer />
       </div>
+    </div>
     )
   }
 
@@ -753,6 +751,8 @@ export default function MemberPortalPage() {
           charges={celebration.charges}
           message={celebration.message}
         />
+
+        <Footer />
       </div>
     </div>
   )

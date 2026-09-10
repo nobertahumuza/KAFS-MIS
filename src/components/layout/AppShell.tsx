@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Sidebar from '@/components/layout/Sidebar'
 import Header from '@/components/layout/Header'
+import Footer from '@/components/layout/Footer'
 import { useSession } from 'next-auth/react'
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -30,6 +31,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <main className="flex-1 p-4 lg:p-6 overflow-auto">
           {children}
         </main>
+
+        <Footer />
       </div>
     </div>
   )
