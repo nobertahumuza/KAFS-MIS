@@ -28,3 +28,25 @@
   --color-gold-dark: var(--color-gold-dark);
   --color-gold-light: var(--color-gold-light);
 }
+
+/* Print styles */
+@media print {
+  body {
+    background: white !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .hidden.print\\:block {
+    display: block !important;
+  }
+  .space-y-6 > * + * {
+    margin-top: 0 !important;
+  }
+  main, [role="main"] {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+}
