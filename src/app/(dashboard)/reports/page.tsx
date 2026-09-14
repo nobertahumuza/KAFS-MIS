@@ -1,13 +1,13 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Printer, Calendar, TrendingUp, Users, DollarSign, FileText, Shield, Mail, Download, Receipt, Wallet } from "lucide-react"
+import { Printer, Calendar, TrendingUp, Users, DollarSign, FileText, Shield, Mail, Download, Receipt, Wallet, Landmark, PiggyBank, BarChart3, CreditCard } from "lucide-react"
 import PageHeader from "@/components/ui/PageHeader"
 import Table from "@/components/ui/Table"
 import Badge from "@/components/ui/Badge"
 import Button from "@/components/ui/Button"
 import Input from "@/components/ui/Input"
-import { MetricCard } from "@/components/ui/Card"
+import { Card, MetricCard } from "@/components/ui/Card"
 import { formatUGX, formatDate } from "@/lib/utils"
 
 interface SavingsReport {
@@ -55,7 +55,20 @@ interface FinancialReport {
   totalIncome: number
 }
 
+interface SummaryReport {
+  totalMembers: number
+  totalAccounts: number
+  totalSavings: number
+  totalLoans: number
+  totalOutstandingBalance: number
+  activeLoans: number
+  totalShares: number
+  totalSharesCount: number
+  totalExpenses: number
+}
+
 const TABS = [
+  { id: "summary", label: "Summary", icon: BarChart3 },
   { id: "savings", label: "Savings", icon: DollarSign },
   { id: "loans", label: "Loans", icon: FileText },
   { id: "members", label: "Members", icon: Users },
@@ -77,6 +90,7 @@ export default function ReportsPage() {
   const [loansReport, setLoansReport] = useState<LoansReport>({ totalLoans: 0, activeLoans: 0, totalDisbursed: 0, totalRepaid: 0, outstandingBalance: 0, recentLoans: [] })
   const [membersReport, setMembersReport] = useState<MembersReport>({ totalMembers: 0, activeMembers: 0, newThisMonth: 0, genderDistribution: { male: 0, female: 0 } })
   const [financialReport, setFinancialReport] = useState<FinancialReport>({ totalAssets: 0, totalLiabilities: 0, netWorth: 0, totalExpenses: 0, totalIncome: 0 })
+  const [summaryReport, setSummaryReport] = useState<SummaryReport>({ totalMembers: 0, totalAccounts: 0, totalSavings: 0, totalLoans: 0, totalOutstandingBalance: 0, activeLoans: 0, totalShares: 0, totalSharesCount: 0, totalExpenses: 0 })
   const [chargesReport, setChargesReport] = useState<{ withdrawalFees: number; loanInterest: number; smsCharges: number; totalCharges: number; withdrawalCount: number; loanCount: number }>({ withdrawalFees: 0, loanInterest: 0, smsCharges: 0, totalCharges: 0, withdrawalCount: 0, loanCount: 0 })
 
   const fetchReport = useCallback(async (tab: TabId) => {
@@ -96,6 +110,22 @@ export default function ReportsPage() {
             netSavings: data.summary?.netSavings || 0,
             transactionCount: (data.transactions || []).length,
             recentTransactions: (data.transactions || []).slice(0, 5),
+          })
+        }
+      } else if (tab === "summary") {
+        const res = await fetch(`/api/dashboard`)
+        if (res.ok) {
+          const data = await res.json()
+          setSummaryReport({
+            totalMembers: data.totalMembers || 0,
+            totalAccounts: data.totalAccounts || 0,
+            totalSavings: data.totalSavings || 0,
+            totalLoans: data.totalLoans || 0,
+            totalOutstandingBalance: data.totalOutstandingBalance || 0,
+            activeLoans: data.activeLoans || 0,
+            totalShares: data.totalShares || 0,
+            totalSharesCount: data.totalSharesCount || 0,
+            totalExpenses: data.totalExpenses || 0,
           })
         }
       } else if (tab === "loans") {
@@ -234,7 +264,25 @@ export default function ReportsPage() {
 
       let y = 42
 
-      if (activeTab === "savings") {
+      if (activeTab === "summary") {
+        doc.setFontSize(12)
+        doc.text("Bank Summary", 14, y); y += 8
+        autoTable(doc, {
+          startY: y,
+          head: [["Metric", "Value"]],
+          body: [
+            ["Total Members", String(summaryReport.totalMembers)],
+            ["Total Accounts", String(summaryReport.totalAccounts)],
+            ["Total Savings", formatUGX(summaryReport.totalSavings)],
+            ["Total Loans Disbursed", formatUGX(summaryReport.totalLoans)],
+            ["Outstanding Loan Balance", formatUGX(summaryReport.totalOutstandingBalance)],
+            ["Active Loans", String(summaryReport.activeLoans)],
+            ["Total Shares Value", formatUGX(summaryReport.totalShares)],
+            ["Total Shares Count", `${summaryReport.totalSharesCount.toLocaleString()} shares`],
+            ["Total Expenses", formatUGX(summaryReport.totalExpenses)],
+          ],
+        })
+      } else if (activeTab === "savings") {
         doc.setFontSize(12)
         doc.text("Summary", 14, y); y += 8
         autoTable(doc, {
@@ -394,6 +442,62 @@ export default function ReportsPage() {
           })}
         </nav>
       </div>
+
+      {activeTab === "summary" && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <MetricCard label="Total Members" value={summaryReport.totalMembers} icon={<Users className="w-5 h-5" />} />
+            <MetricCard label="Total Accounts" value={summaryReport.totalAccounts} icon={<Landmark className="w-5 h-5" />} />
+            <MetricCard label="Total Savings" value={formatUGX(summaryReport.totalSavings)} icon={<PiggyBank className="w-5 h-5" />} />
+            <MetricCard label="Total Loans Disbursed" value={formatUGX(summaryReport.totalLoans)} icon={<CreditCard className="w-5 h-5" />} />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <MetricCard label="Outstanding Loan Balance" value={formatUGX(summaryReport.totalOutstandingBalance)} icon={<TrendingUp className="w-5 h-5" />} />
+            <MetricCard label="Active Loans" value={summaryReport.activeLoans} icon={<FileText className="w-5 h-5" />} />
+            <MetricCard label="Total Shares Value" value={formatUGX(summaryReport.totalShares)} icon={<TrendingUp className="w-5 h-5" />} />
+            <MetricCard label="Total Shares Count" value={`${summaryReport.totalSharesCount.toLocaleString()} shares`} icon={<BarChart3 className="w-5 h-5" />} />
+          </div>
+
+          <Card className="p-6">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4 uppercase tracking-wider">Bank Overview</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div className="flex justify-between items-center py-3 border-b border-gray-100 dark:border-gray-800">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Total Members</span>
+                  <span className="text-lg font-bold text-gray-900 dark:text-white">{summaryReport.totalMembers}</span>
+                </div>
+                <div className="flex justify-between items-center py-3 border-b border-gray-100 dark:border-gray-800">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Total Active Accounts</span>
+                  <span className="text-lg font-bold text-gray-900 dark:text-white">{summaryReport.totalAccounts}</span>
+                </div>
+                <div className="flex justify-between items-center py-3 border-b border-gray-100 dark:border-gray-800">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Total Savings (Deposits)</span>
+                  <span className="text-lg font-bold text-[var(--color-primary)]">{formatUGX(summaryReport.totalSavings)}</span>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div className="flex justify-between items-center py-3 border-b border-gray-100 dark:border-gray-800">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Total Loans Disbursed</span>
+                  <span className="text-lg font-bold text-gray-900 dark:text-white">{formatUGX(summaryReport.totalLoans)}</span>
+                </div>
+                <div className="flex justify-between items-center py-3 border-b border-gray-100 dark:border-gray-800">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Outstanding Loan Balance</span>
+                  <span className="text-lg font-bold text-orange-600 dark:text-orange-400">{formatUGX(summaryReport.totalOutstandingBalance)}</span>
+                </div>
+                <div className="flex justify-between items-center py-3 border-b border-gray-100 dark:border-gray-800">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Total Shares</span>
+                  <span className="text-lg font-bold text-[var(--color-gold)]">{summaryReport.totalSharesCount.toLocaleString()} shares ({formatUGX(summaryReport.totalShares)})</span>
+                </div>
+                <div className="flex justify-between items-center py-3 border-b border-gray-100 dark:border-gray-800">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Total Expenses</span>
+                  <span className="text-lg font-bold text-red-600 dark:text-red-400">{formatUGX(summaryReport.totalExpenses)}</span>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
 
       {activeTab === "savings" && (
         <div className="space-y-6">

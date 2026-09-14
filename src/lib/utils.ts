@@ -30,7 +30,8 @@ export function generateMemberCode(index: number): string {
 }
 
 export function generateAccountNo(index: number): string {
-  return `KAFS-ACC-${String(index).padStart(3, '0')}`
+  const year = new Date().getFullYear().toString().slice(-2)
+  return `ACC${year}${String(index).padStart(5, '0')}`
 }
 
 export function generateLoanCode(index: number): string {

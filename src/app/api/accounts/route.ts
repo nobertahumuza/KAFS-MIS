@@ -63,9 +63,24 @@ export async function POST(request: NextRequest) {
     const {
       memberId,
       newMember,
-      accountType,
       applicationType = "Single",
-      initialDeposit,
+      accountType,
+      accountTypeOther,
+      currency = "UGX",
+      currencyOther,
+      maritalStatus,
+      dateOfBirth,
+      placeOfBirth,
+      nationality,
+      employerBusiness,
+      sourceOfFunds,
+      purposeOfAccount,
+      nextOfKinName,
+      nextOfKinContact,
+      beneficiary,
+      idDocumentType,
+      idDocumentNumber,
+      status = "Draft",
     } = body
 
     if (!accountType) {
@@ -75,18 +90,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (initialDeposit === undefined || initialDeposit === null || initialDeposit < 0) {
-      return NextResponse.json(
-        { error: "A valid initial deposit is required" },
-        { status: 400 }
-      )
-    }
-
     let resolvedMemberId = memberId
     let memberRecord = null
 
     if (!memberId && newMember) {
-      const { farmerName, phoneNumber, email, gender, ninNumber, address, parish, district, occupation } = newMember
+      const { farmerName, phoneNumber, email, gender, ninNumber, address, village, parish, subCounty, district, occupation } = newMember
 
       if (!farmerName?.trim()) {
         return NextResponse.json(
@@ -121,7 +129,9 @@ export async function POST(request: NextRequest) {
           gender: gender || "Male",
           ninNumber: ninNumber?.trim() || null,
           address: address?.trim() || null,
+          village: village?.trim() || null,
           parish: parish?.trim() || null,
+          subCounty: subCounty?.trim() || null,
           district: district?.trim() || null,
           occupation: occupation?.trim() || null,
           registrationDate: new Date(),
@@ -144,6 +154,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Year-based account numbering: ACC + 2-digit year + 5-digit sequence
+    const currentYear = new Date().getFullYear().toString().slice(-2)
+    const prefix = `ACC${currentYear}`
+
     const lastAccount = await prisma.customer.findFirst({
       orderBy: { id: "desc" },
       select: { accountNo: true },
@@ -151,28 +165,57 @@ export async function POST(request: NextRequest) {
 
     let nextAccIndex = 1
     if (lastAccount?.accountNo) {
-      const match = lastAccount.accountNo.match(/(\d+)$/)
-      if (match) nextAccIndex = parseInt(match[1]) + 1
+      const match = lastAccount.accountNo.match(new RegExp(`^${prefix}(\\d+)$`))
+      if (match) {
+        nextAccIndex = parseInt(match[1]) + 1
+      }
     }
 
     const accountNo = generateAccountNo(nextAccIndex)
+
+    // Determine gender from newMember or memberRecord
+    const gender = newMember?.gender || memberRecord?.gender || "Male"
+    const fullName = newMember?.farmerName?.trim() || memberRecord!.farmerName
+    const phoneNumber = newMember?.phoneNumber?.trim() || memberRecord!.phoneNumber
+    const emailAddress = newMember?.email?.trim() || memberRecord?.email || null
+    const nin = newMember?.ninNumber?.trim() || memberRecord?.ninNumber || null
+    const residentialAddress = newMember?.address?.trim() || memberRecord?.address || null
+    const dist = newMember?.district?.trim() || memberRecord?.district || null
+    const sub = newMember?.subCounty?.trim() || memberRecord?.subCounty || null
+    const occ = newMember?.occupation?.trim() || memberRecord?.occupation || null
 
     const account = await prisma.customer.create({
       data: {
         memberId: resolvedMemberId,
         accountNo,
         accountType,
+        accountTypeOther: accountTypeOther?.trim() || null,
         applicationType,
-        fullName: memberRecord!.farmerName,
-        gender: memberRecord!.gender || "Male",
-        phoneNumber: memberRecord!.phoneNumber,
-        emailAddress: memberRecord!.email,
-        ninNumber: memberRecord!.ninNumber,
-        residentialAddress: memberRecord!.address,
-        district: memberRecord!.district,
-        subCounty: memberRecord?.subCounty || null,
-        occupation: memberRecord!.occupation,
-        status: "Active",
+        currency,
+        currencyOther: currency?.trim() === "Other" ? currencyOther?.trim() || null : null,
+        fullName,
+        gender,
+        maritalStatus: maritalStatus || "Single",
+        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+        placeOfBirth: placeOfBirth?.trim() || null,
+        district: dist,
+        county: body.county?.trim() || null,
+        subCounty: sub,
+        nationality: nationality?.trim() || "Ugandan",
+        phoneNumber,
+        emailAddress,
+        residentialAddress,
+        occupation: occ,
+        employerBusiness: employerBusiness?.trim() || null,
+        ninNumber: nin,
+        sourceOfFunds: sourceOfFunds || null,
+        purposeOfAccount: purposeOfAccount || null,
+        nextOfKinName: nextOfKinName?.trim() || null,
+        nextOfKinContact: nextOfKinContact?.trim() || null,
+        beneficiary: beneficiary?.trim() || null,
+        idDocumentType: idDocumentType || null,
+        idDocumentNumber: idDocumentNumber?.trim() || null,
+        status: status || "Draft",
       },
       include: {
         member: {
@@ -185,44 +228,17 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    if (initialDeposit > 0) {
-      const lastSavings = await prisma.savingsLedger.findFirst({
-        where: { memberId: resolvedMemberId },
-        orderBy: { id: "desc" },
-        select: { balanceAfter: true },
-      })
-      const currentBalance = lastSavings?.balanceAfter ?? 0
+    // Audit trail
+    await prisma.auditTrail.create({
+      data: {
+        actionType: "AccountOpening",
+        description: `Account opened: ${accountNo} for ${fullName}`,
+        memberId: resolvedMemberId,
+        accountNumber: accountNo,
+      },
+    })
 
-      const referenceNumber = `REF-DEP-${Date.now()}`
-
-      await prisma.savingsLedger.create({
-        data: {
-          memberId: resolvedMemberId,
-          transactionType: "Deposit",
-          amount: initialDeposit,
-          withdrawalFee: 0,
-          balanceAfter: currentBalance + initialDeposit,
-          narration: "Initial deposit on account opening",
-          referenceNumber,
-          transactionDate: new Date(),
-        },
-      })
-
-      await prisma.auditTrail.create({
-        data: {
-          actionType: "AccountOpening",
-          description: `Account opened: ${accountNo} for ${memberRecord!.farmerName}`,
-          amount: initialDeposit,
-          memberId: resolvedMemberId,
-          accountNumber: accountNo,
-          referenceNumber,
-        },
-      })
-
-      smsAccountOpening(resolvedMemberId, accountNo, accountType, initialDeposit)
-    } else {
-      smsAccountOpening(resolvedMemberId, accountNo, accountType, 0)
-    }
+    smsAccountOpening(resolvedMemberId, accountNo, accountType, 0)
 
     return NextResponse.json(
       {

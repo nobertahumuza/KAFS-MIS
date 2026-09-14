@@ -26,12 +26,14 @@ import { formatUGX } from "@/lib/utils"
 
 interface DashboardData {
   totalMembers: number
+  totalAccounts: number
   totalSavings: number
   totalLoans: number
   activeLoans: number
   totalExpenses: number
   totalShares: number
   totalSharesCount: number
+  totalOutstandingBalance: number
   delinquentLoans: number
   cashFlow: {
     month: string
@@ -146,12 +148,17 @@ export default function DashboardPage() {
         }
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <MetricCard
           label="Total Members"
           value={data.totalMembers}
           icon={<Users className="w-5 h-5" />}
           trend={{ value: 5, isPositive: true }}
+        />
+        <MetricCard
+          label="Total Accounts"
+          value={data.totalAccounts}
+          icon={<Landmark className="w-5 h-5" />}
         />
         <MetricCard
           label="Total Savings"
