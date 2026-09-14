@@ -135,11 +135,8 @@ export default function AccountsPage() {
   useEffect(() => {
     fetch("/api/accounts/next-code")
       .then((res) => res.json())
-      .then((d) => setNextAccountNo(d.code || "ACC2600001"))
-      .catch(() => {
-        const year = new Date().getFullYear().toString().slice(-2)
-        setNextAccountNo(`ACC${year}00001`)
-      })
+      .then((d) => setNextAccountNo(d.code || "KAFS-ACC-001"))
+      .catch(() => setNextAccountNo("KAFS-ACC-001"))
 
     fetch("/api/members?pageSize=1000")
       .then((res) => res.json())

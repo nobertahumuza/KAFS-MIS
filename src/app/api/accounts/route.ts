@@ -154,10 +154,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Year-based account numbering: ACC + 2-digit year + 5-digit sequence
-    const currentYear = new Date().getFullYear().toString().slice(-2)
-    const prefix = `ACC${currentYear}`
-
+    // Sequential account numbering: KAFS-ACC-001, KAFS-ACC-002, ...
     const lastAccount = await prisma.customer.findFirst({
       orderBy: { id: "desc" },
       select: { accountNo: true },
@@ -165,10 +162,8 @@ export async function POST(request: NextRequest) {
 
     let nextAccIndex = 1
     if (lastAccount?.accountNo) {
-      const match = lastAccount.accountNo.match(new RegExp(`^${prefix}(\\d+)$`))
-      if (match) {
-        nextAccIndex = parseInt(match[1]) + 1
-      }
+      const match = lastAccount.accountNo.match(/(\d+)$/)
+      if (match) nextAccIndex = parseInt(match[1]) + 1
     }
 
     const accountNo = generateAccountNo(nextAccIndex)
