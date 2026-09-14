@@ -30,7 +30,7 @@ export function generateMemberCode(index: number): string {
 }
 
 export function generateAccountNo(index: number): string {
-  return `KAFS-ACC-${String(index).padStart(3, '0')}`
+  return `KAFS-${String(index).padStart(3, '0')}`
 }
 
 export function generateLoanCode(index: number): string {

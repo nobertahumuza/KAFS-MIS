@@ -18,6 +18,6 @@ export async function GET() {
     return NextResponse.json({ code: generateAccountNo(nextIndex) })
   } catch (error) {
     console.error("Next account number error:", error)
-    return NextResponse.json({ code: "KAFS-ACC-001" })
+    return NextResponse.json({ code: "KAFS-001" })
   }
 }
