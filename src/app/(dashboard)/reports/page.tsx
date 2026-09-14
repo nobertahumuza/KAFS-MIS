@@ -335,7 +335,7 @@ export default function ReportsPage() {
     doc.setFont("helvetica", "normal")
     doc.setTextColor(130, 130, 130)
     doc.text("Kataho Farmers SACCO - Mutara | Saving for our Future", 14, pageHeight - 13)
-    doc.text("Designed by NobTechWorld | 0771 918 116", pageWidth - 14, pageHeight - 13, { align: "right" })
+    doc.text("Designed by NobTechWorld | Contact: 0760 399 849", pageWidth - 14, pageHeight - 13, { align: "right" })
   }
 
   const handleDownloadPDF = async () => {

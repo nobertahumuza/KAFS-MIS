@@ -52,7 +52,7 @@ export default function Footer() {
         {/* Bottom row */}
         <div className="pt-5 border-t border-white/[0.04] flex flex-col sm:flex-row items-center justify-between gap-2">
           <p className="text-[11px] text-white/20">
-            Designed by <span className="font-medium text-white/30">NobTechWorld</span> &middot; &copy; {year} KATAHO FARMERS&apos; SACCO
+            Designed by <span className="font-medium text-white/30">NobTechWorld</span> &middot; Contact: 0760 399 849 &middot; &copy; {year} KATAHO FARMERS&apos; SACCO
           </p>
           <p className="text-[11px] text-white/15">
             All rights reserved
