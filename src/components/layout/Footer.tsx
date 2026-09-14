@@ -21,14 +21,14 @@ export default function Footer() {
 
           {/* Contact */}
           <div className="flex flex-col gap-1.5">
-            <a href="https://wa.me/256760399849" target="_blank" rel="noopener noreferrer"
+            <a href="https://wa.me/256771918116" target="_blank" rel="noopener noreferrer"
               className="flex items-center gap-2 text-xs text-white/35 hover:text-green-400 transition-colors">
               <MessageCircle className="w-3.5 h-3.5" />
-              WhatsApp: +256 760 399 849
+              WhatsApp: +256 771 918 116
             </a>
-            <a href="tel:+256760399849" className="flex items-center gap-2 text-xs text-white/35 hover:text-[var(--color-gold)] transition-colors">
+            <a href="tel:+256771918116" className="flex items-center gap-2 text-xs text-white/35 hover:text-[var(--color-gold)] transition-colors">
               <Phone className="w-3.5 h-3.5" />
-              +256 760 399 849
+              +256 771 918 116
             </a>
             <a href="mailto:katahofarmerssacco@gmail.com" className="flex items-center gap-2 text-xs text-white/35 hover:text-[var(--color-gold)] transition-colors">
               <Mail className="w-3.5 h-3.5" />

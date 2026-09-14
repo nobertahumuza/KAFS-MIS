@@ -184,7 +184,7 @@ export function generateReportHTML(data: {
       </table>
     </div>
     <div class="footer">
-      <p>Designed by NobTechWorld | For help call 0760 399 849</p>
+      <p>Designed by NobTechWorld | For help call 0771 918 116</p>
       <p>This is an automated report from KAFS SACCO Management System</p>
     </div>
   </div>

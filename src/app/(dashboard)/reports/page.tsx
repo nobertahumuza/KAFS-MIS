@@ -324,7 +324,7 @@ export default function ReportsPage() {
       }
 
       doc.setFontSize(8)
-      doc.text("Designed by NobTechWorld | 0760 399 849", pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: "center" })
+      doc.text("Designed by NobTechWorld | 0771 918 116", pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: "center" })
 
       doc.save(`KAFS_${activeTab}_report_${new Date().toISOString().split("T")[0]}.pdf`)
     } catch (err) {
