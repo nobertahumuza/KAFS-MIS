@@ -36,6 +36,10 @@ model User {
   documentsUploaded    MemberDocument[]
   budgetsCreated       Budget[]
   fiscalYearsClosed    FiscalYear[]
+  createdJointAccounts JointAccount[]
+  approvedAdvances     LoanAdvance[]      @relation("LoanAdvanceApprover")
+  recordedAdvances     LoanAdvance[]      @relation("LoanAdvanceRecorder")
+  recordedFees         MembershipFee[]
 
   @@map("users")
 }
@@ -80,6 +84,12 @@ model Member {
   expenses              Expense[]
   documents             MemberDocument[]
   savingsInterest       SavingsInterest[]
+  loanAdvances          LoanAdvance[]
+  jointAccountMembers   JointAccountMember[]
+  membershipFees        MembershipFee[]
+  charityDeductions     CharityDeduction[]
+  serviceFeeDeductions  ServiceFeeDeduction[]
+  memberExpenses        MemberExpense[]
 
   @@map("members")
 }
@@ -282,6 +292,7 @@ model Loan {
   currentBalance     Float    @map("current_balance")
   loanPurpose        String?  @map("loan_purpose")
   loanStatus         String?  @default("Active") @map("loan_status")
+  loanType           String?  @default("Regular") @map("loan_type")
   disbursementDate   DateTime @map("disbursement_date")
   dueDate            DateTime? @map("due_date")
   recordedBy         Int?     @map("recorded_by")
@@ -295,6 +306,7 @@ model Loan {
   repaymentSchedules LoanRepaymentSchedule[]
   repayments        LoanRepayment[]
   loanInterest      LoanInterest[]
+  loanAdvances      LoanAdvance[]
 
   @@map("loans")
 }
@@ -785,4 +797,115 @@ model LoanInterest {
   loan Loan @relation(fields: [loanId], references: [id], onDelete: Cascade)
 
   @@map("loan_interest")
+}
+
+model JointAccount {
+  id              Int      @id @default(autoincrement())
+  accountCode     String   @unique @map("joint_account_code")
+  accountName     String   @map("account_name")
+  accountType     String   @default("Group") @map("account_type")
+  totalBalance    Float    @default(0) @map("total_balance")
+  status          String   @default("Active")
+  createdBy       Int?     @map("created_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  members JointAccountMember[]
+  creator User? @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+
+  @@map("joint_accounts")
+}
+
+model JointAccountMember {
+  id              Int      @id @default(autoincrement())
+  jointAccountId  Int      @map("joint_account_id")
+  memberId        Int      @map("member_id")
+  role            String   @default("Member")  // Primary, Member
+  sharePercent    Float    @default(0) @map("share_percent")
+  joinedAt        DateTime @default(now()) @map("joined_at")
+
+  jointAccount JointAccount @relation(fields: [jointAccountId], references: [id], onDelete: Cascade)
+  member       Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@map("joint_account_members")
+}
+
+model LoanAdvance {
+  id              Int      @id @default(autoincrement())
+  advanceCode     String   @unique @map("advance_code")
+  memberId        Int      @map("member_id")
+  loanId          Int      @map("loan_id")
+  advanceAmount   Float    @map("advance_amount")
+  reason          String?
+  status          String   @default("Pending")
+  approvedBy      Int?     @map("approved_by")
+  approvedAt      DateTime? @map("approved_at")
+  disbursementDate DateTime? @map("disbursement_date")
+  recordedBy      Int?     @map("recorded_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  member  Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  loan    Loan   @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  approver User? @relation("LoanAdvanceApprover", fields: [approvedBy], references: [id], onDelete: SetNull)
+  recorder User? @relation("LoanAdvanceRecorder", fields: [recordedBy], references: [id], onDelete: SetNull)
+
+  @@map("loan_advances")
+}
+
+model MembershipFee {
+  id          Int      @id @default(autoincrement())
+  memberId    Int      @map("member_id")
+  amount      Float
+  feeType     String   @default("Membership") @map("fee_type")
+  description String?
+  paidDate    DateTime @map("paid_date")
+  recordedBy  Int?     @map("recorded_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  member  Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  recorder User? @relation(fields: [recordedBy], references: [id], onDelete: SetNull)
+
+  @@map("membership_fees")
+}
+
+model CharityDeduction {
+  id          Int      @id @default(autoincrement())
+  memberId    Int      @map("member_id")
+  amount      Float    @default(6000)
+  year        Int
+  deductedAt  DateTime @default(now()) @map("deducted_at")
+  referenceNo String?  @map("reference_no")
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@map("charity_deductions")
+}
+
+model ServiceFeeDeduction {
+  id          Int      @id @default(autoincrement())
+  memberId    Int      @map("member_id")
+  amount      Float    @default(300)
+  month       Int
+  year        Int
+  deductedAt  DateTime @default(now()) @map("deducted_at")
+  referenceNo String?  @map("reference_no")
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@map("service_fee_deductions")
+}
+
+model MemberExpense {
+  id          Int      @id @default(autoincrement())
+  memberId    Int      @map("member_id")
+  category    String
+  description String
+  amount      Float
+  expenseDate DateTime @map("expense_date")
+  month       Int
+  year        Int
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@map("member_expenses")
 }

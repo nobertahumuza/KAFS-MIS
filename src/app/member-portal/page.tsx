@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useRef } from "react"
-import { User, Wallet, TrendingDown, TrendingUp, Landmark, PiggyBank, LogOut, Eye, EyeOff, Clock, CreditCard, CheckCircle, AlertCircle, Camera } from "lucide-react"
+import { User, Wallet, TrendingDown, TrendingUp, Landmark, PiggyBank, LogOut, Eye, EyeOff, Clock, CreditCard, CheckCircle, AlertCircle, Camera, Receipt, Calendar } from "lucide-react"
 import { formatUGX, formatDate } from "@/lib/utils"
 import CelebrationPopup from "@/components/ui/CelebrationPopup"
 import Footer from "@/components/layout/Footer"
@@ -88,7 +88,7 @@ interface MemberData {
   }>
 }
 
-type Tab = "overview" | "savings" | "loans" | "shares" | "fixed"
+type Tab = "overview" | "savings" | "loans" | "shares" | "fixed" | "expenses" | "schedule"
 
 export default function MemberPortalPage() {
   const [loggedIn, setLoggedIn] = useState(false)
@@ -110,6 +110,15 @@ export default function MemberPortalPage() {
 
   const [photoUploading, setPhotoUploading] = useState(false)
   const photoInputRef = useRef<HTMLInputElement>(null)
+
+  const [expenses, setExpenses] = useState<Array<{ id: number; category: string; description: string; amount: number; date: string }>>([])
+  const [expensesLoading, setExpensesLoading] = useState(false)
+  const [expenseForm, setExpenseForm] = useState({ category: "Food", description: "", amount: "", date: new Date().toISOString().split("T")[0] })
+  const [expenseError, setExpenseError] = useState("")
+  const [expenseSubmitting, setExpenseSubmitting] = useState(false)
+
+  const [schedule, setSchedule] = useState<Array<{ id: number; installmentNumber: number; dueDate: string; amountDue: number; amountPaid: number; fine: number; status: string; loan: { loanCode: string; principalAmount: number; currentBalance: number } }>>([])
+  const [scheduleLoading, setScheduleLoading] = useState(false)
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -140,6 +149,64 @@ export default function MemberPortalPage() {
       setPayError("Failed to upload photo")
     } finally {
       setPhotoUploading(false)
+    }
+  }
+
+  const fetchExpenses = useCallback(async () => {
+    if (!data) return
+    setExpensesLoading(true)
+    try {
+      const res = await fetch(`/api/member-expenses?memberId=${data.member.id}`)
+      if (res.ok) {
+        const d = await res.json()
+        setExpenses(d.expenses || [])
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setExpensesLoading(false)
+    }
+  }, [data])
+
+  const fetchSchedule = useCallback(async () => {
+    if (!data) return
+    setScheduleLoading(true)
+    try {
+      const res = await fetch(`/api/loan-schedule?memberId=${data.member.id}`)
+      if (res.ok) {
+        const d = await res.json()
+        setSchedule(d.schedule || [])
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setScheduleLoading(false)
+    }
+  }, [data])
+
+  const handleAddExpense = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!data) return
+    setExpenseError("")
+    const amt = parseFloat(expenseForm.amount)
+    if (!amt || amt <= 0) { setExpenseError("Enter a valid amount"); return }
+    setExpenseSubmitting(true)
+    try {
+      const res = await fetch("/api/member-expenses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memberId: data.member.id, ...expenseForm, amount: amt }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || "Failed to add expense")
+      }
+      setExpenseForm({ category: "Food", description: "", amount: "", date: new Date().toISOString().split("T")[0] })
+      fetchExpenses()
+    } catch (err) {
+      setExpenseError(err instanceof Error ? err.message : "Failed to add expense")
+    } finally {
+      setExpenseSubmitting(false)
     }
   }
 
@@ -236,6 +303,8 @@ export default function MemberPortalPage() {
     { key: "loans", label: "Loans", icon: Landmark },
     { key: "shares", label: "Shares", icon: TrendingUp },
     { key: "fixed", label: "Fixed Deposits", icon: Wallet },
+    { key: "expenses", label: "Expenses", icon: Receipt },
+    { key: "schedule", label: "Schedule", icon: Calendar },
   ]
 
   if (!loggedIn || !data) {
@@ -391,7 +460,7 @@ export default function MemberPortalPage() {
           {tabs.map((tab) => {
             const Icon = tab.icon
             return (
-              <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+              <button key={tab.key} onClick={() => { setActiveTab(tab.key); if (tab.key === "expenses") fetchExpenses(); if (tab.key === "schedule") fetchSchedule() }}
                 className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl transition-all whitespace-nowrap ${
                   activeTab === tab.key
                     ? "bg-gradient-to-r from-[var(--color-primary)] to-[var(--color-primary-dark)] text-white shadow-lg shadow-[var(--color-primary)]/20"
@@ -698,6 +767,163 @@ export default function MemberPortalPage() {
                 </div>
               ))
             )}
+          </div>
+        )}
+
+        {activeTab === "expenses" && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-gradient-to-b from-orange-500/20 to-orange-600/5 border border-orange-500/20 rounded-2xl p-4">
+                <Receipt className="w-5 h-5 text-white/50 mb-3" />
+                <p className="text-xs text-white/40 mb-1">Total Expenses This Month</p>
+                <p className="text-sm font-bold text-white">{formatUGX(expenses.filter(e => { const d = new Date(e.date); const now = new Date(); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() }).reduce((s, e) => s + e.amount, 0))}</p>
+              </div>
+              <div className="bg-gradient-to-b from-purple-500/20 to-purple-600/5 border border-purple-500/20 rounded-2xl p-4">
+                <Receipt className="w-5 h-5 text-white/50 mb-3" />
+                <p className="text-xs text-white/40 mb-1">Total All Expenses</p>
+                <p className="text-sm font-bold text-white">{formatUGX(expenses.reduce((s, e) => s + e.amount, 0))}</p>
+              </div>
+            </div>
+
+            <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-6">
+              <h3 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
+                <Receipt className="w-4.5 h-4.5 text-[var(--color-gold)]" />Add New Expense
+              </h3>
+              <form onSubmit={handleAddExpense} className="space-y-4">
+                {expenseError && (
+                  <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">{expenseError}</div>
+                )}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-white/50 mb-2 ml-1">Category</label>
+                    <select value={expenseForm.category} onChange={e => setExpenseForm(p => ({ ...p, category: e.target.value }))}
+                      className="w-full px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white focus:ring-2 focus:ring-[var(--color-gold)]/50 focus:border-[var(--color-gold)]/50 transition-all">
+                      {["Food", "Transport", "Medical", "Education", "Farm Inputs", "Utilities", "Other"].map(c => <option key={c} value={c} className="bg-[#12172a]">{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-white/50 mb-2 ml-1">Date</label>
+                    <input type="date" value={expenseForm.date} onChange={e => setExpenseForm(p => ({ ...p, date: e.target.value }))}
+                      className="w-full px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white focus:ring-2 focus:ring-[var(--color-gold)]/50 focus:border-[var(--color-gold)]/50 transition-all" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-white/50 mb-2 ml-1">Description</label>
+                  <input type="text" value={expenseForm.description} onChange={e => setExpenseForm(p => ({ ...p, description: e.target.value }))} placeholder="Optional description"
+                    className="w-full px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white placeholder:text-white/25 focus:ring-2 focus:ring-[var(--color-gold)]/50 focus:border-[var(--color-gold)]/50 transition-all" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-white/50 mb-2 ml-1">Amount (UGX)</label>
+                  <input type="number" value={expenseForm.amount} onChange={e => setExpenseForm(p => ({ ...p, amount: e.target.value }))} placeholder="0" min="1"
+                    className="w-full px-4 py-3 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white placeholder:text-white/25 focus:ring-2 focus:ring-[var(--color-gold)]/50 focus:border-[var(--color-gold)]/50 transition-all" />
+                </div>
+                <button type="submit" disabled={expenseSubmitting}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-[var(--color-gold)] to-yellow-600 text-white text-sm font-semibold hover:shadow-lg hover:shadow-[var(--color-gold)]/20 disabled:opacity-50 transition-all">
+                  {expenseSubmitting ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                  Add Expense
+                </button>
+              </form>
+            </div>
+
+            <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-6">
+              <h3 className="text-base font-semibold text-white mb-4">Expense History</h3>
+              {expensesLoading ? (
+                <div className="text-center py-8"><div className="w-6 h-6 border-2 border-white/20 border-t-[var(--color-gold)] rounded-full animate-spin mx-auto" /></div>
+              ) : expenses.length === 0 ? (
+                <p className="text-white/30 text-center py-8">No expenses recorded</p>
+              ) : (
+                <div className="space-y-2">
+                  {expenses.map(e => (
+                    <div key={e.id} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.04]">
+                      <div>
+                        <p className="text-sm font-medium text-white/80">{e.category}</p>
+                        <p className="text-[11px] text-white/30">{formatDate(e.date)}{e.description ? ` • ${e.description}` : ""}</p>
+                      </div>
+                      <p className="text-sm font-bold text-red-400">-{formatUGX(e.amount)}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === "schedule" && (
+          <div className="space-y-6">
+            <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-6">
+              <h3 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
+                <Calendar className="w-4.5 h-4.5 text-[var(--color-gold)]" />Loan Repayment Schedule
+              </h3>
+              {scheduleLoading ? (
+                <div className="text-center py-8"><div className="w-6 h-6 border-2 border-white/20 border-t-[var(--color-gold)] rounded-full animate-spin mx-auto" /></div>
+              ) : schedule.length === 0 ? (
+                <div className="text-center py-8">
+                  <Calendar className="w-12 h-12 mx-auto text-white/15 mb-3" />
+                  <p className="text-white/30">No repayment schedule found</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {(() => {
+                    const grouped: Record<string, typeof schedule> = {}
+                    schedule.forEach(s => {
+                      const code = s.loan.loanCode
+                      if (!grouped[code]) grouped[code] = []
+                      grouped[code].push(s)
+                    })
+                    return Object.entries(grouped).map(([loanCode, installments]) => {
+                      const totalDue = installments.reduce((s, i) => s + i.amountDue, 0)
+                      const totalPaid = installments.reduce((s, i) => s + i.amountPaid, 0)
+                      const loan = installments[0].loan
+                      const paidPercent = totalDue > 0 ? (totalPaid / totalDue) * 100 : 0
+                      return (
+                        <div key={loanCode} className="bg-white/[0.03] border border-white/[0.04] rounded-xl p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <div>
+                              <h4 className="text-sm font-semibold text-white">{loanCode}</h4>
+                              <p className="text-[11px] text-white/30">Principal: {formatUGX(loan.principalAmount)} • Outstanding: {formatUGX(loan.currentBalance)}</p>
+                            </div>
+                            <span className="text-xs text-white/40">{paidPercent.toFixed(0)}% paid</span>
+                          </div>
+                          <div className="w-full bg-white/[0.06] rounded-full h-2 mb-3">
+                            <div className="bg-gradient-to-r from-green-500 to-emerald-400 h-2 rounded-full transition-all duration-500" style={{ width: `${Math.min(paidPercent, 100)}%` }} />
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="text-white/30 border-b border-white/[0.06]">
+                                  <th className="text-left py-2 pr-2 font-medium">#</th>
+                                  <th className="text-left py-2 pr-2 font-medium">Due Date</th>
+                                  <th className="text-right py-2 pr-2 font-medium">Amount Due</th>
+                                  <th className="text-right py-2 pr-2 font-medium">Paid</th>
+                                  <th className="text-right py-2 pr-2 font-medium">Fine</th>
+                                  <th className="text-right py-2 font-medium">Status</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {installments.map(i => (
+                                  <tr key={i.id} className="border-b border-white/[0.03]">
+                                    <td className="py-2 pr-2 text-white/50">{i.installmentNumber}</td>
+                                    <td className="py-2 pr-2 text-white/70">{formatDate(i.dueDate)}</td>
+                                    <td className="py-2 pr-2 text-right text-white/70">{formatUGX(i.amountDue)}</td>
+                                    <td className="py-2 pr-2 text-right text-green-400">{formatUGX(i.amountPaid)}</td>
+                                    <td className="py-2 pr-2 text-right text-orange-400">{i.fine > 0 ? formatUGX(i.fine) : "—"}</td>
+                                    <td className="py-2 text-right">
+                                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${i.status === "Paid" ? "bg-green-500/15 text-green-400 border border-green-500/20" : i.status === "Partial" ? "bg-yellow-500/15 text-yellow-400 border border-yellow-500/20" : "bg-red-500/15 text-red-400 border border-red-500/20"}`}>
+                                        {i.status}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )
+                    })
+                  })()}
+                </div>
+              )}
+            </div>
           </div>
         )}
 

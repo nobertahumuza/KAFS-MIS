@@ -479,6 +479,10 @@ export default function SavingsPage() {
                 <span>Total Deduction</span>
                 <span>{formatUGX(totalDeduction)}</span>
               </div>
+              <div className="flex justify-between text-sm font-semibold text-emerald-600 dark:text-emerald-400 pt-1">
+                <span>Amount Will Be Credited</span>
+                <span>{formatUGX(Math.max(0, withdrawalAmount - WITHDRAWAL_FEE))}</span>
+              </div>
             </div>
           )}
 

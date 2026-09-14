@@ -109,7 +109,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { memberId, principalAmount, interestRate, duration, purpose } = body
+    const { memberId, principalAmount, interestRate, duration, purpose, loanType = "Regular" } = body
 
     if (!memberId) {
       return NextResponse.json({ error: "Member is required" }, { status: 400 })
@@ -119,13 +119,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Valid principal amount is required" }, { status: 400 })
     }
 
+    if (!["Regular", "Emergency"].includes(loanType)) {
+      return NextResponse.json({ error: "loanType must be 'Regular' or 'Emergency'" }, { status: 400 })
+    }
+
     const member = await prisma.member.findUnique({ where: { id: memberId } })
     if (!member) {
       return NextResponse.json({ error: "Member not found" }, { status: 404 })
     }
 
-    const rate = parseFloat(interestRate) || 2.5
-    const loanDuration = parseInt(duration) || 12
+    const rate = loanType === "Emergency" ? 10 : (parseFloat(interestRate) || 2.5)
+    const loanDuration = loanType === "Emergency" ? 1 : (parseInt(duration) || 12)
     const totalInterest = principalAmount * (rate / 100) * loanDuration
     const totalPayable = principalAmount + totalInterest
 
@@ -182,6 +186,7 @@ export async function POST(request: NextRequest) {
         interestRate: rate,
         currentBalance: totalPayable,
         loanPurpose: purpose || null,
+        loanType,
         loanStatus: "Active",
         disbursementDate: now,
         dueDate,
@@ -227,7 +232,7 @@ export async function POST(request: NextRequest) {
     await prisma.auditTrail.create({
       data: {
         actionType: "LoanDisbursement",
-        description: `Loan ${loanCode} disbursed to ${member.farmerName} - UGX ${principalAmount.toLocaleString()}`,
+        description: `Loan ${loanCode} (${loanType}) disbursed to ${member.farmerName} - UGX ${principalAmount.toLocaleString()}`,
         amount: principalAmount,
         memberId,
       },

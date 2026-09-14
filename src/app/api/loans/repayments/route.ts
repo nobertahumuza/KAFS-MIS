@@ -121,27 +121,31 @@ export async function POST(request: NextRequest) {
     }
     await prisma.loan.update({ where: { id: loanId }, data: updateData })
 
+    let currentSchedule = null
     if (scheduleId) {
-      await prisma.loanRepaymentSchedule.update({
-        where: { id: scheduleId },
-        data: { amountPaid: { increment: amountPaid }, status: "Paid" },
-      })
+      currentSchedule = await prisma.loanRepaymentSchedule.findUnique({ where: { id: scheduleId } })
+      if (currentSchedule) {
+        await prisma.loanRepaymentSchedule.update({
+          where: { id: scheduleId },
+          data: { amountPaid: { increment: amountPaid }, status: "Paid" },
+        })
+      }
     } else {
-      const pendingSchedule = await prisma.loanRepaymentSchedule.findFirst({
+      currentSchedule = await prisma.loanRepaymentSchedule.findFirst({
         where: { loanId, status: "Pending" },
         orderBy: { dueDate: "asc" },
       })
-      if (pendingSchedule) {
+      if (currentSchedule) {
         await prisma.loanRepaymentSchedule.update({
-          where: { id: pendingSchedule.id },
+          where: { id: currentSchedule.id },
           data: { amountPaid: { increment: amountPaid }, status: "Paid" },
         })
       }
     }
 
-    if (totalFinePaid > 0 && scheduleId) {
+    if (totalFinePaid > 0 && currentSchedule) {
       const fine = await prisma.loanFine.findFirst({
-        where: { loanId, scheduleId, status: "Pending" },
+        where: { loanId, scheduleId: currentSchedule.id, status: "Pending" },
       })
       if (fine) {
         await prisma.loanFine.update({
@@ -152,6 +156,53 @@ export async function POST(request: NextRequest) {
             status: "Paid",
           },
         })
+      }
+    }
+
+    if (currentSchedule) {
+      const now = new Date()
+      const overdueDays = Math.floor(
+        (now.getTime() - new Date(currentSchedule.dueDate).getTime()) / (1000 * 60 * 60 * 24)
+      )
+
+      if (overdueDays > 0) {
+        const existingFine = await prisma.loanFine.findFirst({
+          where: { loanId, scheduleId: currentSchedule.id },
+        })
+
+        if (!existingFine) {
+          let fineAmount = 0
+          let fineRate = 0
+          let reason = ""
+
+          if (loan.loanType === "Emergency") {
+            fineRate = 10
+            fineAmount = parseFloat(((loan.principalAmount * fineRate) / 100).toFixed(2))
+            reason = `Emergency loan fine - ${overdueDays} days overdue (10% flat of principal)`
+          } else {
+            fineRate = 5
+            fineAmount = parseFloat((((currentSchedule.totalAmount ?? 0) * fineRate) / 100).toFixed(2))
+            reason = `Late payment fine - ${overdueDays} days overdue (5% of monthly repayment)`
+          }
+
+          if (fineAmount > 0) {
+            await prisma.loanFine.create({
+              data: {
+                loanId,
+                scheduleId: currentSchedule.id,
+                fineAmount,
+                fineRate,
+                reason,
+                status: "Pending",
+              },
+            })
+
+            await prisma.loanRepaymentSchedule.update({
+              where: { id: currentSchedule.id },
+              data: { fineAmount: (currentSchedule.fineAmount ?? 0) + fineAmount },
+            })
+          }
+        }
       }
     }
 

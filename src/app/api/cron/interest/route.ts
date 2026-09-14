@@ -25,14 +25,27 @@ export async function POST(request: NextRequest) {
 }
 
 async function calculateSavingsInterest(period: string, fiscalYear: number) {
+  const now = new Date()
+  const sixMonthsAgo = new Date(now)
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
+
   const members = await prisma.member.findMany({
     where: { status: "Active" },
   })
 
   const results: { memberId: number; memberName: string; balance: number; interestEarned: number }[] = []
-  const SAVERS_INTEREST_RATE = 3
+  const SAVINGS_INTEREST_RATE = 3
 
   for (const member of members) {
+    const firstEntry = await prisma.savingsLedger.findFirst({
+      where: { memberId: member.id },
+      orderBy: { id: "asc" },
+      select: { createdAt: true },
+    })
+
+    if (!firstEntry) continue
+    if (firstEntry.createdAt > sixMonthsAgo) continue
+
     const lastSavingsEntry = await prisma.savingsLedger.findFirst({
       where: { memberId: member.id },
       orderBy: { id: "desc" },
@@ -43,7 +56,7 @@ async function calculateSavingsInterest(period: string, fiscalYear: number) {
 
     if (balance > 500000) {
       const interestEarned = parseFloat(
-        ((balance * SAVERS_INTEREST_RATE) / 100).toFixed(2)
+        ((balance * SAVINGS_INTEREST_RATE) / 100).toFixed(2)
       )
 
       const existing = await prisma.savingsInterest.findFirst({
@@ -55,7 +68,7 @@ async function calculateSavingsInterest(period: string, fiscalYear: number) {
           data: {
             memberId: member.id,
             period,
-            interestRate: SAVERS_INTEREST_RATE,
+            interestRate: SAVINGS_INTEREST_RATE,
             balance,
             interestEarned,
             fiscalYear,
@@ -89,41 +102,51 @@ async function calculateLoanInterest(period: string) {
     },
   })
 
-  const results: { loanId: number; loanCode: string; memberName: string; principalBalance: number; interestAmount: number }[] = []
-  const LOAN_INTEREST_RATE = 2.5
+  const results: { loanId: number; loanCode: string; memberName: string; principalBalance: number; interestAmount: number; loanType: string }[] = []
 
   for (const loan of activeLoans) {
-    const principalBalance = loan.currentBalance
+    const existing = await prisma.loanInterest.findFirst({
+      where: { loanId: loan.id, period },
+    })
 
-    if (principalBalance > 0) {
-      const interestAmount = parseFloat(
-        ((principalBalance * LOAN_INTEREST_RATE) / 100).toFixed(2)
-      )
+    if (existing) continue
 
-      const existing = await prisma.loanInterest.findFirst({
-        where: { loanId: loan.id, period },
+    let interestAmount = 0
+    let interestRate = 0
+    let principalBalance = loan.currentBalance
+
+    if (loan.loanType === "Emergency") {
+      interestRate = 10
+      const hasBeenCharged = await prisma.loanInterest.findFirst({
+        where: { loanId: loan.id },
       })
+      if (hasBeenCharged) continue
+      principalBalance = loan.principalAmount
+      interestAmount = parseFloat(((principalBalance * interestRate) / 100).toFixed(2))
+    } else {
+      interestRate = 2.5
+      if (principalBalance <= 0) continue
+      interestAmount = parseFloat(((principalBalance * interestRate) / 100).toFixed(2))
+    }
 
-      if (!existing) {
-        await prisma.loanInterest.create({
-          data: {
-            loanId: loan.id,
-            period,
-            interestRate: LOAN_INTEREST_RATE,
-            principalBalance,
-            interestAmount,
-          },
-        })
-      }
-
-      results.push({
+    await prisma.loanInterest.create({
+      data: {
         loanId: loan.id,
-        loanCode: loan.loanCode,
-        memberName: loan.member.farmerName,
+        period,
+        interestRate,
         principalBalance,
         interestAmount,
-      })
-    }
+      },
+    })
+
+    results.push({
+      loanId: loan.id,
+      loanCode: loan.loanCode,
+      memberName: loan.member.farmerName,
+      principalBalance,
+      interestAmount,
+      loanType: loan.loanType ?? "Regular",
+    })
   }
 
   const totalInterest = results.reduce((sum, r) => sum + r.interestAmount, 0)

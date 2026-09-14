@@ -28,6 +28,10 @@ export const SIDEBAR_NAV = [
   { icon: 'PieChart', label: 'Budget', href: '/reports/budget', roles: [ROLES.ADMIN, ROLES.TREASURER] },
   { icon: 'Calendar', label: 'Year End', href: '/reports/year-end', roles: [ROLES.ADMIN] },
   { icon: 'FileText', label: 'Statements', href: '/reports/statement', roles: [ROLES.ADMIN, ROLES.CASHIER] },
+  { icon: 'Users', label: 'Joint Accounts', href: '/joint-accounts', roles: [ROLES.ADMIN, ROLES.CASHIER] },
+  { icon: 'ArrowUpRight', label: 'Loan Advances', href: '/loan-advances', roles: [ROLES.ADMIN, ROLES.LOANS_OFFICER] },
+  { icon: 'CreditCard', label: 'Membership Fees', href: '/membership-fees', roles: [ROLES.ADMIN, ROLES.CASHIER] },
+  { icon: 'Calendar', label: 'Payment Schedule', href: '/payment-schedule', roles: [ROLES.ADMIN, ROLES.LOANS_OFFICER] },
   { icon: 'MessageSquare', label: 'SMS', href: '/sms', roles: [ROLES.ADMIN, ROLES.CASHIER] },
   { icon: 'Settings', label: 'Settings', href: '/settings', roles: [ROLES.ADMIN] },
 ] as const

@@ -121,6 +121,28 @@ export async function POST(request: NextRequest) {
         where: { id: log.id },
         data: { status: "Sent", providerMsgId: result.providerMsgId || null, sentAt: new Date() },
       })
+
+      if (memberId) {
+        const lastEntry = await prisma.savingsLedger.findFirst({
+          where: { memberId: Number(memberId) },
+          orderBy: { id: "desc" },
+          select: { balanceAfter: true },
+        })
+        const currentBalance = lastEntry?.balanceAfter ?? 0
+        const newBalance = currentBalance - 100
+
+        await prisma.savingsLedger.create({
+          data: {
+            memberId: Number(memberId),
+            transactionType: "Withdrawal",
+            amount: 100,
+            balanceAfter: newBalance,
+            narration: "SMS Charge",
+            transactionDate: new Date(),
+          },
+        })
+      }
+
       return NextResponse.json({ data: { ...log, status: "Sent" }, message: "SMS sent successfully" }, { status: 201 })
     }
 
