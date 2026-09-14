@@ -31,6 +31,7 @@ interface DashboardData {
   activeLoans: number
   totalExpenses: number
   totalShares: number
+  totalSharesCount: number
   delinquentLoans: number
   cashFlow: {
     month: string
@@ -166,9 +167,8 @@ export default function DashboardPage() {
         />
         <MetricCard
           label="Total Shares"
-          value={formatUGX(data.totalShares)}
+          value={`${data.totalSharesCount.toLocaleString()} shares (${formatUGX(data.totalShares)})`}
           icon={<TrendingUp className="w-5 h-5" />}
-          trend={{ value: 8, isPositive: true }}
         />
       </div>
 

@@ -18,7 +18,7 @@ export async function GET() {
       prisma.loan.aggregate({ _sum: { principalAmount: true } }),
       prisma.loan.count({ where: { loanStatus: "Active" } }),
       prisma.expense.aggregate({ _sum: { amount: true } }),
-      prisma.sharesLedger.aggregate({ _sum: { totalAmount: true } }),
+      prisma.sharesLedger.aggregate({ _sum: { totalAmount: true, sharesQuantity: true } }),
       prisma.savingsLedger.findMany({
         take: 5,
         orderBy: { createdAt: "desc" },
@@ -70,6 +70,7 @@ export async function GET() {
       activeLoans,
       totalExpenses: expensesAgg._sum.amount || 0,
       totalShares: sharesAgg._sum.totalAmount || 0,
+      totalSharesCount: sharesAgg._sum.sharesQuantity || 0,
       recentTransactions,
     })
   } catch (error) {
@@ -82,6 +83,7 @@ export async function GET() {
         activeLoans: 0,
         totalExpenses: 0,
         totalShares: 0,
+        totalSharesCount: 0,
         recentTransactions: [],
       },
       { status: 200 }
