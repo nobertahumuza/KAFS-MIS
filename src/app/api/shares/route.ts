@@ -114,3 +114,102 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Failed to record share transaction" }, { status: 500 })
   }
 }
+
+export async function PUT(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const { id, memberId, quantity, sharePrice, transactionType, transactionDate, narration } = body
+
+    if (!id) {
+      return NextResponse.json({ error: "Transaction ID is required" }, { status: 400 })
+    }
+
+    const existing = await prisma.sharesLedger.findUnique({ where: { id: Number(id) } })
+    if (!existing) {
+      return NextResponse.json({ error: "Transaction not found" }, { status: 404 })
+    }
+
+    const price = Number(sharePrice) || existing.sharePrice
+    const qty = Number(quantity) || existing.sharesQuantity
+    const totalAmount = price * qty
+
+    const updated = await prisma.sharesLedger.update({
+      where: { id: Number(id) },
+      data: {
+        memberId: memberId ? Number(memberId) : existing.memberId,
+        transactionType: transactionType || existing.transactionType,
+        sharesQuantity: qty,
+        sharePrice: price,
+        totalAmount,
+        narration: narration?.trim() || existing.narration,
+        transactionDate: transactionDate ? new Date(transactionDate) : existing.transactionDate,
+      },
+    })
+
+    const oldMemberId = existing.memberId
+    const newMemberId = updated.memberId
+
+    if (oldMemberId === newMemberId) {
+      const qtyDiff = qty - existing.sharesQuantity
+      const amtDiff = totalAmount - existing.totalAmount
+      await prisma.member.update({
+        where: { id: oldMemberId },
+        data: {
+          totalShares: { increment: qtyDiff },
+          shareValue: { increment: amtDiff },
+        },
+      })
+    } else {
+      await prisma.member.update({
+        where: { id: oldMemberId },
+        data: {
+          totalShares: { decrement: existing.sharesQuantity },
+          shareValue: { decrement: existing.totalAmount },
+        },
+      })
+      await prisma.member.update({
+        where: { id: newMemberId },
+        data: {
+          totalShares: { increment: qty },
+          shareValue: { increment: totalAmount },
+        },
+      })
+    }
+
+    return NextResponse.json({ message: "Transaction updated successfully", transaction: updated })
+  } catch (error) {
+    console.error("PUT /api/shares error:", error)
+    return NextResponse.json({ error: "Failed to update transaction" }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get("id")
+
+    if (!id) {
+      return NextResponse.json({ error: "Transaction ID is required" }, { status: 400 })
+    }
+
+    const existing = await prisma.sharesLedger.findUnique({ where: { id: Number(id) } })
+    if (!existing) {
+      return NextResponse.json({ error: "Transaction not found" }, { status: 404 })
+    }
+
+    await prisma.sharesLedger.delete({ where: { id: Number(id) } })
+
+    await prisma.member.update({
+      where: { id: existing.memberId },
+      data: {
+        totalShares: { decrement: existing.sharesQuantity },
+        shareValue: { decrement: existing.totalAmount },
+      },
+    })
+
+    return NextResponse.json({ message: "Transaction deleted successfully" })
+  } catch (error) {
+    console.error("DELETE /api/shares error:", error)
+    return NextResponse.json({ error: "Failed to delete transaction" }, { status: 500 })
+  }
+}

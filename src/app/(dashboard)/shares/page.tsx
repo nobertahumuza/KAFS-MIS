@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { Search, Plus, TrendingUp, Users, DollarSign, ExternalLink } from "lucide-react"
+import { Search, Plus, TrendingUp, Users, DollarSign, ExternalLink, Pencil, Trash2 } from "lucide-react"
 import PageHeader from "@/components/ui/PageHeader"
 import Table from "@/components/ui/Table"
 import Badge from "@/components/ui/Badge"
@@ -83,6 +83,13 @@ export default function SharesPage() {
   const [memberSearch, setMemberSearch] = useState("")
   const [memberOptions, setMemberOptions] = useState<MemberOption[]>([])
   const [memberDropdownOpen, setMemberDropdownOpen] = useState(false)
+
+  const [editingTx, setEditingTx] = useState<ShareTransaction | null>(null)
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [editForm, setEditForm] = useState<FormData>(initialForm)
+  const [editErrors, setEditErrors] = useState<Partial<Record<keyof FormData, string>>>({})
+  const [editSubmitting, setEditSubmitting] = useState(false)
+  const [editSubmitError, setEditSubmitError] = useState("")
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -169,6 +176,73 @@ export default function SharesPage() {
       setSubmitError(err instanceof Error ? err.message : "An unexpected error occurred")
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const openEdit = (tx: ShareTransaction) => {
+    setEditingTx(tx)
+    setEditForm({
+      memberId: String(tx.memberId),
+      quantity: String(tx.sharesQuantity),
+      sharePrice: String(tx.sharePrice),
+      transactionType: tx.transactionType,
+      transactionDate: tx.transactionDate.split("T")[0],
+      narration: tx.narration || "",
+      sendSms: false,
+    })
+    setMemberSearch(`${tx.member.memberCode} - ${tx.member.farmerName}`)
+    setEditErrors({})
+    setEditSubmitError("")
+    setEditModalOpen(true)
+  }
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editForm.memberId) { setEditErrors({ memberId: "Select a member" }); return }
+    const qty = parseInt(editForm.quantity)
+    if (!editForm.quantity || isNaN(qty) || qty <= 0) { setEditErrors({ quantity: "Enter a valid quantity" }); return }
+    setEditSubmitting(true)
+    setEditSubmitError("")
+    try {
+      const res = await fetch("/api/shares", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingTx!.id,
+          memberId: parseInt(editForm.memberId),
+          quantity: qty,
+          sharePrice: parseFloat(editForm.sharePrice) || 10000,
+          transactionType: editForm.transactionType,
+          transactionDate: editForm.transactionDate,
+          narration: editForm.narration.trim() || null,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || "Failed to update")
+      }
+      setEditModalOpen(false)
+      setEditingTx(null)
+      fetchData()
+    } catch (err) {
+      setEditSubmitError(err instanceof Error ? err.message : "An unexpected error occurred")
+    } finally {
+      setEditSubmitting(false)
+    }
+  }
+
+  const handleDelete = async (id: number) => {
+    if (!confirm("Delete this share transaction? The member's share count will be reversed.")) return
+    try {
+      const res = await fetch(`/api/shares?id=${id}`, { method: "DELETE" })
+      if (res.ok) {
+        fetchData()
+      } else {
+        const data = await res.json()
+        alert(data.error || "Failed to delete")
+      }
+    } catch {
+      alert("Failed to delete transaction")
     }
   }
 
@@ -262,6 +336,31 @@ export default function SharesPage() {
       render: (item: Record<string, unknown>) => (
         <span className="text-xs text-gray-500">{formatDateTime(item.transactionDate as string)}</span>
       ),
+    },
+    {
+      key: "actions",
+      header: "",
+      render: (item: Record<string, unknown>) => {
+        const tx = item as unknown as ShareTransaction
+        return (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={(e) => { e.stopPropagation(); openEdit(tx) }}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+              title="Edit"
+            >
+              <Pencil className="w-4 h-4" />
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); handleDelete(tx.id) }}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+              title="Delete"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        )
+      },
     },
   ]
 
@@ -408,6 +507,87 @@ export default function SharesPage() {
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
             <Button type="button" variant="ghost" onClick={() => { setModalOpen(false); setForm(initialForm); setMemberSearch("") }}>Cancel</Button>
             <Button type="submit" loading={submitting}>Confirm Purchase</Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal open={editModalOpen} onClose={() => { setEditModalOpen(false); setEditingTx(null); setEditForm(initialForm); setMemberSearch("") }} title="Edit Share Transaction" size="md">
+        <form onSubmit={handleEditSubmit} className="space-y-4">
+          {editSubmitError && (
+            <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+              <p className="text-sm text-red-600 dark:text-red-400">{editSubmitError}</p>
+            </div>
+          )}
+
+          <div className="relative">
+            <Input
+              label="Member *"
+              value={memberSearch}
+              onChange={(e) => { setMemberSearch(e.target.value); setEditForm((p) => ({ ...p, memberId: "" })); setMemberDropdownOpen(true) }}
+              onFocus={() => setMemberDropdownOpen(true)}
+              placeholder="Search member by name or code..."
+              error={editErrors.memberId}
+            />
+            {memberDropdownOpen && memberOptions.length > 0 && (
+              <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                {memberOptions.map((m) => (
+                  <button key={m.id} type="button" onClick={() => { setEditForm((prev) => ({ ...prev, memberId: String(m.id) })); setMemberSearch(`${m.memberCode} - ${m.farmerName}`); setMemberDropdownOpen(false); setMemberOptions([]) }} className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 border-b border-gray-100 dark:border-gray-700 last:border-0">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{m.farmerName}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{m.memberCode}</p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <Input
+            label="Quantity *"
+            type="number"
+            value={editForm.quantity}
+            onChange={(e) => setEditForm((p) => ({ ...p, quantity: e.target.value }))}
+            error={editErrors.quantity}
+            placeholder="0"
+            min="1"
+          />
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Price Per Share"
+              type="number"
+              value={editForm.sharePrice}
+              onChange={(e) => setEditForm((p) => ({ ...p, sharePrice: e.target.value }))}
+              placeholder="10000"
+            />
+            <Select
+              label="Type"
+              value={editForm.transactionType}
+              onChange={(e) => setEditForm((p) => ({ ...p, transactionType: e.target.value }))}
+              options={[
+                { value: "Purchase", label: "Purchase" },
+                { value: "Transfer In", label: "Transfer In" },
+                { value: "Transfer Out", label: "Transfer Out" },
+                { value: "Bonus", label: "Bonus" },
+              ]}
+            />
+          </div>
+
+          <Input
+            label="Date"
+            type="date"
+            value={editForm.transactionDate}
+            onChange={(e) => setEditForm((p) => ({ ...p, transactionDate: e.target.value }))}
+          />
+
+          <Input
+            label="Narration"
+            value={editForm.narration}
+            onChange={(e) => setEditForm((p) => ({ ...p, narration: e.target.value }))}
+            placeholder="Optional note"
+          />
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="ghost" onClick={() => { setEditModalOpen(false); setEditingTx(null) }}>Cancel</Button>
+            <Button type="submit" loading={editSubmitting}>Save Changes</Button>
           </div>
         </form>
       </Modal>
