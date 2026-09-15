@@ -43,6 +43,7 @@ interface FormData {
   beneficiary: string
   idDocumentType: string
   idDocumentNumber: string
+  openingBalance: string
   status: string
 }
 
