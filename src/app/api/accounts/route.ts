@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
-import { generateAccountNo, generateMemberCode } from "@/lib/utils"
+import { generateAccountNo, generateMemberCode, generateReference } from "@/lib/utils"
 import { smsAccountOpening } from "@/lib/sms"
 
 export async function GET(request: NextRequest) {
@@ -80,6 +80,7 @@ export async function POST(request: NextRequest) {
       beneficiary,
       idDocumentType,
       idDocumentNumber,
+      openingBalance = 0,
       status = "Draft",
     } = body
 
@@ -223,17 +224,36 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    // If opening balance provided, create a savings ledger entry
+    let balance = 0
+    if (openingBalance && openingBalance > 0) {
+      balance = openingBalance
+      const ref = generateReference("OPN", Date.now())
+      await prisma.savingsLedger.create({
+        data: {
+          memberId: resolvedMemberId,
+          transactionType: "Deposit",
+          amount: openingBalance,
+          withdrawalFee: 0,
+          balanceAfter: openingBalance,
+          narration: "Opening balance carried forward",
+          referenceNumber: ref,
+          transactionDate: new Date(),
+        },
+      })
+    }
+
     // Audit trail
     await prisma.auditTrail.create({
       data: {
         actionType: "AccountOpening",
-        description: `Account opened: ${accountNo} for ${fullName}`,
+        description: `Account opened: ${accountNo} for ${fullName}${balance > 0 ? ` with opening balance UGX ${balance.toLocaleString()}` : ""}`,
         memberId: resolvedMemberId,
         accountNumber: accountNo,
       },
     })
 
-    smsAccountOpening(resolvedMemberId, accountNo, accountType, 0)
+    smsAccountOpening(resolvedMemberId, accountNo, accountType, balance)
 
     return NextResponse.json(
       {

@@ -77,6 +77,7 @@ const initialForm: FormData = {
   idDocumentType: "",
   idDocumentNumber: "",
   status: "Draft",
+  openingBalance: "",
 }
 
 const ACCOUNT_TYPES = [
@@ -185,6 +186,7 @@ export default function AccountsPage() {
         beneficiary: form.beneficiary || undefined,
         idDocumentType: form.idDocumentType || undefined,
         idDocumentNumber: form.idDocumentNumber || undefined,
+        openingBalance: form.openingBalance ? parseFloat(form.openingBalance) : 0,
         status: form.status,
       }
 
@@ -362,6 +364,15 @@ export default function AccountsPage() {
                   placeholder="Enter currency"
                 />
               )}
+              <Input
+                label="Opening Balance (UGX)"
+                type="number"
+                min="0"
+                step="1000"
+                value={form.openingBalance}
+                onChange={handleChange("openingBalance")}
+                placeholder="0"
+              />
               <Select
                 label="Linked Member (optional)"
                 value={form.memberId}
