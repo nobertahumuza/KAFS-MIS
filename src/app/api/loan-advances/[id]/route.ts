@@ -110,7 +110,12 @@ export async function PUT(
 
       await prisma.loan.update({
         where: { id: advance.loanId },
-        data: { currentBalance: { increment: advance.advanceAmount } },
+        data: {
+          currentBalance: { increment: advance.advanceAmount },
+          // An advance is extra money lent, so it is principal — it must be tracked
+          // as outstanding principal or it would be mistaken for booked interest.
+          outstandingPrincipal: { increment: advance.advanceAmount },
+        },
       })
 
       return NextResponse.json({ message: "Advance disbursed", data: updated })

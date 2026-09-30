@@ -3,9 +3,23 @@ import prisma from "@/lib/prisma"
 import { generateLoanCode, generateApplicationCode } from "@/lib/utils"
 import { smsLoanDisbursement } from "@/lib/sms"
 import { notifyLoanDisbursed } from "@/lib/notify"
+import { getServerSession } from "@/lib/auth"
+import { ROLES } from "@/lib/constants"
+
+/** Roles that already have a screen reading this endpoint: /loans and
+ *  /payment-schedule (Admin, LoansOfficer) and /reports (Admin, Treasurer). */
+const ALLOWED_ROLES: string[] = [ROLES.ADMIN, ROLES.LOANS_OFFICER, ROLES.TREASURER]
 
 export async function GET(request: NextRequest) {
   try {
+    const session = await getServerSession()
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (!ALLOWED_ROLES.includes(session.user.role)) {
+      return NextResponse.json({ error: "You do not have permission to view loans" }, { status: 403 })
+    }
+
     const { searchParams } = new URL(request.url)
     const search = searchParams.get("search") || ""
     const status = searchParams.get("status") || ""
@@ -38,7 +52,7 @@ export async function GET(request: NextRequest) {
             take: 1,
           },
           repaymentSchedules: {
-            where: { status: "Pending" },
+            where: { status: { in: ["Pending", "Partial"] } },
             orderBy: { dueDate: "asc" },
             take: 1,
           },
@@ -52,6 +66,8 @@ export async function GET(request: NextRequest) {
       }),
       prisma.loan.count({ where }),
     ])
+
+    const now = new Date()
 
     const summary = await prisma.loan.aggregate({
       _sum: { principalAmount: true, currentBalance: true },
@@ -68,26 +84,39 @@ export async function GET(request: NextRequest) {
     })
 
     return NextResponse.json({
-      data: loans.map((loan) => ({
-        ...loan,
-        disbursementDate: loan.disbursementDate.toISOString(),
-        dueDate: loan.dueDate?.toISOString() ?? null,
-        createdAt: loan.createdAt.toISOString(),
-        nextDue: loan.repaymentSchedules[0]
-          ? {
-              dueDate: loan.repaymentSchedules[0].dueDate.toISOString(),
-              totalAmount: loan.repaymentSchedules[0].totalAmount,
-              installmentNo: loan.repaymentSchedules[0].installmentNo,
-            }
-          : null,
-        pendingFinesCount: loan.fines.length,
-        lastPayment: loan.repayments[0]
-          ? {
-              amountPaid: loan.repayments[0].amountPaid,
-              paymentDate: loan.repayments[0].paymentDate.toISOString(),
-            }
-          : null,
-      })),
+      data: loans.map((loan) => {
+        const nextSchedule = loan.repaymentSchedules[0]
+        const dueForStatus = nextSchedule?.dueDate ?? loan.dueDate
+        const isOverdue = loan.loanStatus === "Active" && !!dueForStatus && dueForStatus < now
+        const hasPayment = loan.repayments.length > 0
+        let repaymentStatus: string
+        if (loan.loanStatus === "Cleared" || loan.currentBalance <= 0) repaymentStatus = "Paid"
+        else if (isOverdue) repaymentStatus = "Overdue"
+        else if (hasPayment) repaymentStatus = "Partial"
+        else repaymentStatus = "Current"
+
+        return {
+          ...loan,
+          disbursementDate: loan.disbursementDate.toISOString(),
+          dueDate: loan.dueDate?.toISOString() ?? null,
+          createdAt: loan.createdAt.toISOString(),
+          repaymentStatus,
+          nextDue: loan.repaymentSchedules[0]
+            ? {
+                dueDate: loan.repaymentSchedules[0].dueDate.toISOString(),
+                totalAmount: loan.repaymentSchedules[0].totalAmount,
+                installmentNo: loan.repaymentSchedules[0].installmentNo,
+              }
+            : null,
+          pendingFinesCount: loan.fines.length,
+          lastPayment: loan.repayments[0]
+            ? {
+                amountPaid: loan.repayments[0].amountPaid,
+                paymentDate: loan.repayments[0].paymentDate.toISOString(),
+              }
+            : null,
+        }
+      }),
       total,
       page,
       pageSize,
@@ -185,6 +214,7 @@ export async function POST(request: NextRequest) {
         principalAmount,
         interestRate: rate,
         currentBalance: totalPayable,
+        outstandingPrincipal: principalAmount,
         loanPurpose: purpose || null,
         loanType,
         loanStatus: "Active",

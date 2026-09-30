@@ -13,7 +13,7 @@ import Input from "@/components/ui/Input"
 import Select from "@/components/ui/Select"
 import Modal from "@/components/ui/Modal"
 import { MetricCard } from "@/components/ui/Card"
-import { formatUGX, formatDate } from "@/lib/utils"
+import { formatUGX, formatDate, formatDateTime } from "@/lib/utils"
 
 interface LoanMember {
   id: number
@@ -35,8 +35,11 @@ interface Loan {
   principalAmount: number
   interestRate: number
   currentBalance: number
+  outstandingPrincipal: number
   loanPurpose: string | null
   loanStatus: string | null
+  loanType?: string | null
+  repaymentStatus?: string
   disbursementDate: string
   dueDate: string | null
   createdAt: string
@@ -44,6 +47,40 @@ interface Loan {
   nextDue: NextDue | null
   pendingFinesCount: number
   lastPayment: { amountPaid: number; paymentDate: string } | null
+}
+
+interface LoanSummaryInfo {
+  outstandingPrincipal: number
+  interestComponent: number
+  accruedInterest: number
+  interestAvailable: number
+  accrualDate: string
+  daysElapsed: number
+  maxAmountPaid: number
+  pendingFines: number
+  totalPaid: number
+  totalInterestPaid: number
+  totalPrincipalPaid: number
+  totalFinePaid: number
+  repaymentFrequency: string
+  termMonths: number
+  nextDueDate: string | null
+  nextInstallmentNo: number | null
+  paidInstallments: number
+  partialInstallments: number
+  totalInstallments: number
+}
+
+interface RepaymentHistoryItem {
+  id: number
+  amountPaid: number
+  finePaid: number
+  interestPaid: number
+  principalPaid: number
+  balanceAfter: number
+  paymentDate: string
+  referenceNumber: string | null
+  recorderName: string | null
 }
 
 interface LoanSummary {
@@ -74,21 +111,39 @@ interface ScheduleItem {
 }
 
 interface LoanDetail extends Loan {
+  summary: LoanSummaryInfo
   repaymentSchedules: ScheduleItem[]
-  repayments: Array<{
-    id: number
-    amountPaid: number
-    finePaid: number
-    balanceAfter: number
-    paymentDate: string
-    referenceNumber: string | null
-  }>
+  repayments: RepaymentHistoryItem[]
   fines: Array<{
     id: number
     fineAmount: number
     reason: string | null
     status: string
   }>
+}
+
+interface RepayPreview {
+  summary: {
+    outstandingPrincipal: number
+    interestComponent: number
+    accruedInterest: number
+    interestAvailable: number
+    daysElapsed: number
+    accrualDate: string
+    maxAmountPaid: number
+    pendingFines: number
+    currentBalance: number
+  }
+  allocation?: {
+    feePaid: number
+    interestPaid: number
+    principalPaid: number
+    newBalance: number
+    newOutstandingPrincipal: number
+    writtenOff: number
+    loanCleared: boolean
+  }
+  error?: string
 }
 
 interface DisburseForm {
@@ -143,6 +198,12 @@ export default function LoansPage() {
   const [repayLoanId, setRepayLoanId] = useState<number | null>(null)
   const [repayAmount, setRepayAmount] = useState("")
   const [repayFine, setRepayFine] = useState("")
+  const [repayDate, setRepayDate] = useState("")
+  const [repayReference, setRepayReference] = useState("")
+  const [repayRequestId, setRepayRequestId] = useState("")
+  const [repayPreview, setRepayPreview] = useState<RepayPreview | null>(null)
+  const [repayPreviewError, setRepayPreviewError] = useState("")
+  const [repayPreviewLoading, setRepayPreviewLoading] = useState(false)
 
   const fetchLoans = useCallback(async () => {
     setLoading(true)
@@ -277,12 +338,63 @@ export default function LoansPage() {
     }
   }
 
+  const todayString = () => new Date().toISOString().split("T")[0]
+
   const openRepayModal = (loanId: number) => {
     setRepayLoanId(loanId)
     setRepayAmount("")
     setRepayFine("")
+    setRepayDate(todayString())
+    setRepayReference("")
+    setRepayRequestId(
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    )
+    setRepayPreview(null)
+    setRepayPreviewError("")
     setRepayModalOpen(true)
   }
+
+  // Live allocation preview: shows how the payment splits before it is saved.
+  useEffect(() => {
+    if (!repayModalOpen || !repayLoanId) {
+      setRepayPreview(null)
+      setRepayPreviewError("")
+      return
+    }
+
+    setRepayPreviewLoading(true)
+    const controller = new AbortController()
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams()
+        if (repayDate) params.set("date", repayDate)
+        params.set("amountPaid", String(parseFloat(repayAmount) || 0))
+        params.set("finePaid", String(parseFloat(repayFine) || 0))
+        const res = await fetch(`/api/loans/${repayLoanId}/repayment-preview?${params}`, {
+          signal: controller.signal,
+        })
+        if (res.ok) {
+          const data: RepayPreview = await res.json()
+          setRepayPreview(data)
+          setRepayPreviewError(data.error || "")
+        } else {
+          const data = await res.json()
+          setRepayPreview(null)
+          setRepayPreviewError(data.error || "Failed to preview payment")
+        }
+      } catch {
+        // request aborted / offline — the submit path reports real errors
+      } finally {
+        setRepayPreviewLoading(false)
+      }
+    }, 300)
+    return () => {
+      clearTimeout(timer)
+      controller.abort()
+    }
+  }, [repayModalOpen, repayLoanId, repayAmount, repayFine, repayDate])
 
   const handleRepaySubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -299,10 +411,13 @@ export default function LoansPage() {
           loanId: repayLoanId,
           amountPaid: amount,
           finePaid: parseFloat(repayFine) || 0,
+          paymentDate: repayDate || todayString(),
+          reference: repayReference.trim() || undefined,
+          clientRequestId: repayRequestId,
         }),
       })
+      const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        const data = await res.json()
         throw new Error(data.error || "Repayment failed")
       }
       setRepayModalOpen(false)
@@ -324,6 +439,16 @@ export default function LoansPage() {
   const totalInterest = principalAmount * (interestRate / 100) * duration
   const totalPayable = principalAmount + totalInterest
   const monthlyInstallment = duration > 0 ? totalPayable / duration : 0
+
+  // Derived payment health of the loan being inspected: overdue / fully paid / partially paid.
+  const detailPayStatus: string = (() => {
+    if (!loanDetail) return "Current"
+    if (loanDetail.loanStatus === "Cleared" || loanDetail.currentBalance <= 0) return "Paid"
+    const next = loanDetail.summary?.nextDueDate
+    if (next && new Date(next) < new Date()) return "Overdue"
+    if ((loanDetail.summary?.totalPaid ?? 0) > 0) return "Partial"
+    return "Current"
+  })()
 
   type Row = Record<string, unknown>
 
@@ -395,6 +520,24 @@ export default function LoansPage() {
             <p className="text-xs text-gray-500">Installment #{loan.nextDue.installmentNo}</p>
           </div>
         )
+      },
+    },
+    {
+      key: "repaymentStatus",
+      header: "Payment",
+      render: (item: Row) => {
+        const loan = item as unknown as Loan
+        const status =
+          loan.repaymentStatus || (loan.currentBalance <= 0 ? "Paid" : "Current")
+        const variant =
+          status === "Paid"
+            ? "success"
+            : status === "Overdue"
+            ? "danger"
+            : status === "Partial"
+            ? "warning"
+            : "info"
+        return <Badge variant={variant}>{status}</Badge>
       },
     },
     {
@@ -514,12 +657,61 @@ export default function LoansPage() {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold text-gray-900 dark:text-white">
-                    Repayment Schedule — {loanDetail.loanCode}
+                    Loan Detail — {loanDetail.loanCode}
                   </h3>
-                  <Button variant="ghost" size="sm" onClick={() => { setExpandedLoanId(null); setLoanDetail(null) }}>
-                    <X className="w-4 h-4" />
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant={
+                        detailPayStatus === "Paid"
+                          ? "success"
+                          : detailPayStatus === "Overdue"
+                          ? "danger"
+                          : detailPayStatus === "Partial"
+                          ? "warning"
+                          : "info"
+                      }
+                    >
+                      {detailPayStatus}
+                    </Badge>
+                    <Button variant="ghost" size="sm" onClick={() => { setExpandedLoanId(null); setLoanDetail(null) }}>
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
+
+                {loanDetail.summary && (
+                  <div>
+                    <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">
+                      Loan Summary
+                    </h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {([
+                        ["Original Amount", formatUGX(loanDetail.principalAmount)],
+                        ["Interest Rate", `${loanDetail.interestRate}% / month`],
+                        ["Start Date", formatDate(loanDetail.disbursementDate)],
+                        ["Repayment Frequency", loanDetail.summary.repaymentFrequency],
+                        ["Term", `${loanDetail.summary.termMonths} months`],
+                        ["Outstanding Principal", formatUGX(loanDetail.summary.outstandingPrincipal)],
+                        ["Accrued Interest", formatUGX(loanDetail.summary.accruedInterest)],
+                        ["Next Due", loanDetail.summary.nextDueDate ? `${formatDate(loanDetail.summary.nextDueDate)} · #${loanDetail.summary.nextInstallmentNo}` : "—"],
+                        ["Booked Balance", formatUGX(loanDetail.currentBalance)],
+                        ["Total Paid", formatUGX(loanDetail.summary.totalPaid)],
+                        ["Interest Paid", formatUGX(loanDetail.summary.totalInterestPaid)],
+                        ["Principal Paid", formatUGX(loanDetail.summary.totalPrincipalPaid)],
+                      ] as Array<[string, string]>).map(([label, value]) => (
+                        <div
+                          key={label}
+                          className="rounded-lg bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-800 p-2.5"
+                        >
+                          <p className="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                            {label}
+                          </p>
+                          <p className="text-sm font-semibold text-gray-900 dark:text-white mt-0.5">{value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -554,6 +746,46 @@ export default function LoansPage() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+
+                <div>
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">
+                    Repayment History
+                  </h4>
+                  {loanDetail.repayments.length === 0 ? (
+                    <p className="text-sm text-gray-500 dark:text-gray-400">No repayments recorded yet.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-gray-200 dark:border-gray-700">
+                            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Date</th>
+                            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Reference</th>
+                            <th className="px-3 py-2 text-right text-xs font-semibold text-gray-500 uppercase">Amount</th>
+                            <th className="px-3 py-2 text-right text-xs font-semibold text-gray-500 uppercase">Fees</th>
+                            <th className="px-3 py-2 text-right text-xs font-semibold text-gray-500 uppercase">Interest</th>
+                            <th className="px-3 py-2 text-right text-xs font-semibold text-gray-500 uppercase">Principal</th>
+                            <th className="px-3 py-2 text-right text-xs font-semibold text-gray-500 uppercase">Balance</th>
+                            <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Recorded By</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                          {loanDetail.repayments.map((r) => (
+                            <tr key={r.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                              <td className="px-3 py-2 text-gray-900 dark:text-gray-100">{formatDateTime(r.paymentDate)}</td>
+                              <td className="px-3 py-2 font-mono text-xs text-gray-600 dark:text-gray-300">{r.referenceNumber || "—"}</td>
+                              <td className="px-3 py-2 text-right font-medium text-gray-900 dark:text-gray-100">{formatUGX(r.amountPaid)}</td>
+                              <td className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{formatUGX(r.finePaid || 0)}</td>
+                              <td className="px-3 py-2 text-right text-amber-600 dark:text-amber-400">{formatUGX(r.interestPaid)}</td>
+                              <td className="px-3 py-2 text-right text-emerald-600 dark:text-emerald-400">{formatUGX(r.principalPaid)}</td>
+                              <td className="px-3 py-2 text-right font-semibold text-gray-900 dark:text-gray-100">{formatUGX(r.balanceAfter)}</td>
+                              <td className="px-3 py-2 text-gray-600 dark:text-gray-300">{r.recorderName || "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
 
                 {loanDetail.fines.length > 0 && (
@@ -714,25 +946,128 @@ export default function LoansPage() {
         open={repayModalOpen}
         onClose={() => setRepayModalOpen(false)}
         title="Record Repayment"
-        size="sm"
+        size="md"
       >
         <form onSubmit={handleRepaySubmit} className="space-y-4">
-          <Input
-            label="Payment Amount (UGX) *"
-            type="number"
-            value={repayAmount}
-            onChange={(e) => setRepayAmount(e.target.value)}
-            placeholder="0"
-            min="1"
-          />
-          <Input
-            label="Fine Paid (UGX)"
-            type="number"
-            value={repayFine}
-            onChange={(e) => setRepayFine(e.target.value)}
-            placeholder="0"
-            min="0"
-          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Payment Amount (UGX) *"
+              type="number"
+              value={repayAmount}
+              onChange={(e) => setRepayAmount(e.target.value)}
+              placeholder="0"
+              min="1"
+            />
+            <Input
+              label="Payment Date *"
+              type="date"
+              value={repayDate}
+              onChange={(e) => setRepayDate(e.target.value)}
+              max={todayString()}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Fine Paid (UGX)"
+              type="number"
+              value={repayFine}
+              onChange={(e) => setRepayFine(e.target.value)}
+              placeholder="0"
+              min="0"
+            />
+            <Input
+              label="Reference"
+              value={repayReference}
+              onChange={(e) => setRepayReference(e.target.value)}
+              placeholder="Receipt / transaction ref (optional)"
+            />
+          </div>
+
+          {repayPreview?.summary && (
+            <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-3 space-y-1.5 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-500 dark:text-gray-400">Outstanding principal</span>
+                <span className="font-medium">{formatUGX(repayPreview.summary.outstandingPrincipal)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500 dark:text-gray-400">
+                  Accrued interest ({repayPreview.summary.daysElapsed} day{repayPreview.summary.daysElapsed === 1 ? "" : "s"})
+                </span>
+                <span className="font-medium">{formatUGX(repayPreview.summary.accruedInterest)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500 dark:text-gray-400">Booked balance</span>
+                <span className="font-medium">{formatUGX(repayPreview.summary.currentBalance)}</span>
+              </div>
+              <div className="flex justify-between border-t border-gray-200 dark:border-gray-700 pt-1.5">
+                <span className="text-gray-600 dark:text-gray-300 font-medium">Maximum payment</span>
+                <span className="font-semibold text-[var(--color-primary)]">
+                  {formatUGX(repayPreview.summary.maxAmountPaid)}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {repayPreviewError && (
+            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 space-y-2">
+              <p className="text-xs text-red-600 dark:text-red-400">{repayPreviewError}</p>
+              {repayPreview?.summary && repayPreview.summary.maxAmountPaid > 0 && (
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-red-700 dark:text-red-300 underline"
+                  onClick={() => setRepayAmount(String(repayPreview.summary.maxAmountPaid))}
+                >
+                  Use maximum payment of {formatUGX(repayPreview.summary.maxAmountPaid)}
+                </button>
+              )}
+            </div>
+          )}
+
+          {repayPreview?.allocation && !repayPreviewError && (
+            <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-900/10 p-3 space-y-1.5 text-sm">
+              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                This payment will be allocated to
+              </p>
+              <div className="flex justify-between">
+                <span className="text-gray-500 dark:text-gray-400">Fees / fines</span>
+                <span className="font-medium">{formatUGX(repayPreview.allocation.feePaid)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500 dark:text-gray-400">Interest (reducing balance)</span>
+                <span className="font-medium text-amber-600 dark:text-amber-400">
+                  {formatUGX(repayPreview.allocation.interestPaid)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500 dark:text-gray-400">Principal</span>
+                <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                  {formatUGX(repayPreview.allocation.principalPaid)}
+                </span>
+              </div>
+              <div className="flex justify-between border-t border-emerald-200 dark:border-emerald-800 pt-1.5">
+                <span className="text-gray-600 dark:text-gray-300 font-medium">Balance after payment</span>
+                <span className="font-semibold">{formatUGX(repayPreview.allocation.newBalance)}</span>
+              </div>
+              {repayPreview.allocation.writtenOff > 0 && (
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  UGX {repayPreview.allocation.writtenOff.toLocaleString()} of booked interest that had not
+                  accrued will be written off — the borrower is never charged interest on the original
+                  principal.
+                </p>
+              )}
+              {repayPreview.allocation.loanCleared && (
+                <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                  This payment clears the loan in full.
+                </p>
+              )}
+            </div>
+          )}
+
+          {repayPreviewLoading && (
+            <p className="text-xs text-gray-400 text-center">Calculating allocation…</p>
+          )}
+
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
             <Button type="button" variant="ghost" onClick={() => setRepayModalOpen(false)}>
               Cancel

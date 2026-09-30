@@ -9,6 +9,7 @@
     "lint": "eslint",
     "db:push": "npx prisma db push",
     "db:seed": "npx tsx prisma/seed.ts",
+    "db:backfill-principal": "npx tsx prisma/backfill-outstanding-principal.ts",
     "db:studio": "npx prisma studio",
     "postinstall": "prisma generate"
   },

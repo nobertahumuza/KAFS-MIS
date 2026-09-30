@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { getServerSession } from "@/lib/auth"
+import { ROLES } from "@/lib/constants"
+import { computeRepaymentState, roundMoney } from "@/lib/loan-repayment"
+
+const ALLOWED_ROLES: string[] = [ROLES.ADMIN, ROLES.LOANS_OFFICER]
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -7,6 +12,14 @@ interface RouteParams {
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
+    const session = await getServerSession()
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (!ALLOWED_ROLES.includes(session.user.role)) {
+      return NextResponse.json({ error: "You do not have permission to view loans" }, { status: 403 })
+    }
+
     const { id } = await params
     const loanId = parseInt(id)
 
@@ -28,6 +41,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         },
         repayments: {
           orderBy: { paymentDate: "desc" },
+          include: { recorder: { select: { fullName: true } } },
         },
         fines: true,
         disbursements: true,
@@ -38,11 +52,67 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Loan not found" }, { status: 404 })
     }
 
+    const application = await prisma.loanApplication.findFirst({
+      where: { repaymentSchedules: { some: { loanId } } },
+      orderBy: { id: "desc" },
+      select: { repaymentMode: true, loanDuration: true, loanPeriodMonths: true },
+    })
+
+    const lastPaymentDate = loan.repayments[0]?.paymentDate ?? null
+    const pendingFines = roundMoney(
+      loan.fines.filter((f) => f.status === "Pending").reduce((sum, f) => sum + (f.fineAmount || 0), 0)
+    )
+    const state = computeRepaymentState(
+      {
+        id: loan.id,
+        loanCode: loan.loanCode,
+        principalAmount: loan.principalAmount,
+        interestRate: loan.interestRate,
+        currentBalance: loan.currentBalance,
+        outstandingPrincipal: loan.outstandingPrincipal,
+        disbursementDate: loan.disbursementDate,
+        lastPaymentDate,
+      },
+      new Date(),
+      pendingFines
+    )
+
+    const nextSchedule =
+      loan.repaymentSchedules.find((s) => s.status === "Pending" || s.status === "Partial") ?? null
+    const paidInstallments = loan.repaymentSchedules.filter((s) => s.status === "Paid").length
+    const partialInstallments = loan.repaymentSchedules.filter((s) => s.status === "Partial").length
+
+    const summary = {
+      outstandingPrincipal: state.outstandingPrincipal,
+      interestComponent: state.interestComponent,
+      accruedInterest: state.accruedInterest,
+      interestAvailable: state.interestAvailable,
+      accrualDate: state.accrualDate.toISOString(),
+      daysElapsed: state.daysElapsed,
+      maxAmountPaid: state.maxAmountPaid,
+      pendingFines,
+      totalPaid: roundMoney(loan.repayments.reduce((s, r) => s + r.amountPaid, 0)),
+      totalInterestPaid: roundMoney(loan.repayments.reduce((s, r) => s + r.interestPaid, 0)),
+      totalPrincipalPaid: roundMoney(loan.repayments.reduce((s, r) => s + r.principalPaid, 0)),
+      totalFinePaid: roundMoney(loan.repayments.reduce((s, r) => s + (r.finePaid || 0), 0)),
+      repaymentFrequency: application?.repaymentMode || "Monthly",
+      termMonths:
+        application?.loanPeriodMonths ??
+        application?.loanDuration ??
+        loan.repaymentSchedules.length,
+      nextDueDate: nextSchedule?.dueDate.toISOString() ?? null,
+      nextInstallmentNo: nextSchedule?.installmentNo ?? null,
+      paidInstallments,
+      partialInstallments,
+      totalInstallments: loan.repaymentSchedules.length,
+    }
+
     return NextResponse.json({
       ...loan,
       disbursementDate: loan.disbursementDate.toISOString(),
       dueDate: loan.dueDate?.toISOString() ?? null,
       createdAt: loan.createdAt.toISOString(),
+      summary,
       repaymentSchedules: loan.repaymentSchedules.map((s) => ({
         ...s,
         dueDate: s.dueDate.toISOString(),
@@ -50,6 +120,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       })),
       repayments: loan.repayments.map((r) => ({
         ...r,
+        recorderName: r.recorder?.fullName ?? null,
+        recorder: undefined,
         paymentDate: r.paymentDate.toISOString(),
         createdAt: r.createdAt.toISOString(),
       })),
@@ -67,6 +139,14 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
+    const session = await getServerSession()
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (!ALLOWED_ROLES.includes(session.user.role)) {
+      return NextResponse.json({ error: "You do not have permission to update loans" }, { status: 403 })
+    }
+
     const { id } = await params
     const loanId = parseInt(id)
 
@@ -105,6 +185,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
+    const session = await getServerSession()
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (session.user.role !== ROLES.ADMIN) {
+      return NextResponse.json({ error: "Only an administrator can delete a loan" }, { status: 403 })
+    }
+
     const { id } = await params
     const loanId = parseInt(id)
 
