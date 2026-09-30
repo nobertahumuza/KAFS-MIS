@@ -30,8 +30,7 @@ export function getTimeOfDay(date: Date = new Date()): TimeOfDay {
 
 /** "Good morning" / "Good afternoon" / "Good evening" */
 export function greetingPhrase(date: Date = new Date()): string {
-  const label = getTimeOfDay(date)
-  return `Good ${label.charAt(0).toUpperCase()}${label.slice(1)}`
+  return `Good ${getTimeOfDay(date)}`
 }
 
 /** "Good morning, Syrus" — just the phrase when no name is set. */
