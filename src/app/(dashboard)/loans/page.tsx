@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { useSession } from "next-auth/react"
 import {
   Search, Plus, ChevronDown, ChevronUp, DollarSign, AlertTriangle,
   Clock, BadgeCheck, Landmark, X, Banknote
@@ -14,6 +15,7 @@ import Select from "@/components/ui/Select"
 import Modal from "@/components/ui/Modal"
 import { MetricCard } from "@/components/ui/Card"
 import { formatUGX, formatDate, formatDateTime } from "@/lib/utils"
+import { ROLES } from "@/lib/constants"
 
 interface LoanMember {
   id: number
@@ -165,6 +167,10 @@ const initialDisburseForm: DisburseForm = {
 const PAGE_SIZE = 10
 
 export default function LoansPage() {
+  const { data: session } = useSession()
+  // Only the Loans Officer registers that a borrower has paid.
+  const canRecordRepayment = session?.user?.role === ROLES.LOANS_OFFICER
+
   const [loans, setLoans] = useState<Loan[]>([])
   const [summary, setSummary] = useState<LoanSummary>({
     totalDisbursed: 0,
@@ -548,16 +554,18 @@ export default function LoansPage() {
         const loan = item as unknown as Loan
         return (
           <div className="flex items-center justify-end gap-1">
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                openRepayModal(loan.id)
-              }}
-              className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
-              title="Record Repayment"
-            >
-              <Banknote className="w-4 h-4" />
-            </button>
+            {canRecordRepayment && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  openRepayModal(loan.id)
+                }}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors"
+                title="Record Repayment"
+              >
+                <Banknote className="w-4 h-4" />
+              </button>
+            )}
             <button
               onClick={(e) => {
                 e.stopPropagation()

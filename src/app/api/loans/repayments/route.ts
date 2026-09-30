@@ -12,21 +12,26 @@ import {
   type LoanBalanceInput,
 } from "@/lib/loan-repayment"
 
-/** Only the roles that already have access to the Loans screens may record repayments. */
-const ALLOWED_ROLES: string[] = [ROLES.ADMIN, ROLES.LOANS_OFFICER]
+/** Who may view repayments: the two roles with a screen on /loans. */
+const VIEW_ROLES: string[] = [ROLES.ADMIN, ROLES.LOANS_OFFICER]
+/** Who may register that a borrower has paid: the Loans Officer alone. */
+const RECORD_ROLES: string[] = [ROLES.LOANS_OFFICER]
 
 function unauthorised() {
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 }
 
 function forbidden() {
-  return NextResponse.json({ error: "You do not have permission to manage loan repayments" }, { status: 403 })
+  return NextResponse.json(
+    { error: "Only the Loans Officer can record loan repayments" },
+    { status: 403 }
+  )
 }
 
-async function requireLoanOfficer() {
+async function requireRole(roles: string[]) {
   const session = await getServerSession()
   if (!session?.user) return { user: null, response: unauthorised() }
-  if (!ALLOWED_ROLES.includes(session.user.role)) return { user: null, response: forbidden() }
+  if (!roles.includes(session.user.role)) return { user: null, response: forbidden() }
   return { user: session.user, response: null }
 }
 
@@ -68,7 +73,7 @@ function pendingFinesOf(loan: LoanRecord): number {
 
 export async function GET(request: NextRequest) {
   try {
-    const { response } = await requireLoanOfficer()
+    const { response } = await requireRole(VIEW_ROLES)
     if (response) return response
 
     const { searchParams } = new URL(request.url)
@@ -132,7 +137,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { user, response } = await requireLoanOfficer()
+    const { user, response } = await requireRole(RECORD_ROLES)
     if (response) return response
 
     const userId = parseInt(String(user?.id)) || null

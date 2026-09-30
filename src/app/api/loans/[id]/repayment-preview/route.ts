@@ -9,7 +9,9 @@ import {
   type LoanBalanceInput,
 } from "@/lib/loan-repayment"
 
-const ALLOWED_ROLES: string[] = [ROLES.ADMIN, ROLES.LOANS_OFFICER]
+/** The preview only exists to support recording a repayment, so it follows the
+ *  same single-role rule as POST /api/loans/repayments: Loans Officer only. */
+const ALLOWED_ROLES: string[] = [ROLES.LOANS_OFFICER]
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -26,7 +28,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
     if (!ALLOWED_ROLES.includes(session.user.role)) {
-      return NextResponse.json({ error: "You do not have permission to view repayments" }, { status: 403 })
+      return NextResponse.json(
+        { error: "Only the Loans Officer can record loan repayments" },
+        { status: 403 }
+      )
     }
 
     const { id } = await params
