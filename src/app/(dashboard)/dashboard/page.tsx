@@ -23,6 +23,7 @@ import { Card, MetricCard } from "@/components/ui/Card"
 import Badge from "@/components/ui/Badge"
 import Button from "@/components/ui/Button"
 import { formatUGX } from "@/lib/utils"
+import { useGreeting } from "@/lib/greeting"
 
 interface DashboardData {
   totalMembers: number
@@ -65,6 +66,7 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const greeting = useGreeting(session?.user?.fullName || session?.user?.username)
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -134,7 +136,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={`Welcome back, ${session?.user?.fullName || session?.user?.username}`}
+        title={greeting}
         subtitle="Here's what's happening with your SACCO today."
         actions={
           <Button

@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useTheme } from '@/components/layout/ThemeProvider'
 import { cn, getInitials } from '@/lib/utils'
+import { useGreeting } from '@/lib/greeting'
 import {
   Menu,
   Bell,
@@ -52,6 +53,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   const user = session?.user
+  const greeting = useGreeting(user?.fullName)
 
   const pathSegments = pathname.split('/').filter(Boolean)
   const breadcrumbs = pathSegments.map((segment, index) => {
@@ -151,6 +153,10 @@ export default function Header({ onMenuClick }: HeaderProps) {
       </nav>
 
       <div className="ml-auto flex items-center gap-2">
+        <p className="hidden sm:block text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
+          {greeting}
+        </p>
+
         <button
           onClick={toggleTheme}
           className="flex items-center justify-center w-10 h-10 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"

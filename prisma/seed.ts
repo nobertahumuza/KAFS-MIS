@@ -8,10 +8,10 @@ async function main() {
 
   // ── Users ──────────────────────────────────────────────
   const users = [
-    { fullName: "System Administrator", username: "admin", password: "admin123", role: "Admin" },
-    { fullName: "Cashier User", username: "cashier", password: "cashier123", role: "Cashier" },
-    { fullName: "Loans Officer", username: "officer", password: "officer123", role: "LoansOfficer" },
-    { fullName: "Treasurer User", username: "treasurer", password: "treasurer123", role: "Treasurer" },
+    { fullName: "Admin", username: "admin", password: "admin123", role: "Admin" },
+    { fullName: "Florence", username: "cashier", password: "cashier123", role: "Cashier" },
+    { fullName: "Syrus", username: "officer", password: "officer123", role: "LoansOfficer" },
+    { fullName: "Ruth", username: "treasurer", password: "treasurer123", role: "Treasurer" },
   ]
 
   for (const u of users) {
