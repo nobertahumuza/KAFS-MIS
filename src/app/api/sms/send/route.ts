@@ -94,7 +94,12 @@ export async function POST(request: NextRequest) {
         if (result.success) {
           await prisma.smsLog.update({
             where: { id: log.id },
-            data: { status: "Sent", providerMsgId: result.providerMsgId || null, sentAt: new Date() },
+            data: {
+              status: "Sent",
+              providerMsgId: result.providerMsgId || null,
+              sentAt: new Date(),
+              errorMessage: null,
+            },
           })
           sent++
         } else {
@@ -131,7 +136,12 @@ export async function POST(request: NextRequest) {
     if (result.success) {
       await prisma.smsLog.update({
         where: { id: log.id },
-        data: { status: "Sent", providerMsgId: result.providerMsgId || null, sentAt: new Date() },
+        data: {
+          status: "Sent",
+          providerMsgId: result.providerMsgId || null,
+          sentAt: new Date(),
+          errorMessage: null,
+        },
       })
 
       if (memberId) {
