@@ -70,9 +70,21 @@ export async function POST(request: NextRequest) {
     }
 
     if (Array.isArray(logIds) && logIds.length > 0) {
+      // Resend: only messages that never went out. "Sent" rows are excluded so
+      // a retry can never deliver the same SMS twice.
       const logs = await prisma.smsLog.findMany({
-        where: { id: { in: logIds.map((id: string | number) => Number(id)) }, status: "Pending" },
+        where: {
+          id: { in: logIds.map((id: string | number) => Number(id)) },
+          status: { in: ["Pending", "Failed"] },
+        },
       })
+
+      if (logs.length === 0) {
+        return NextResponse.json(
+          { error: "Nothing to resend — those messages have already been sent." },
+          { status: 400 }
+        )
+      }
 
       let sent = 0
       let failed = 0

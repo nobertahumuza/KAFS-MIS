@@ -6,6 +6,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const search = searchParams.get("search") || ""
     const messageType = searchParams.get("messageType") || ""
+    const status = searchParams.get("status") || ""
     const page = parseInt(searchParams.get("page") || "1")
     const pageSize = parseInt(searchParams.get("pageSize") || "20")
 
@@ -21,6 +22,10 @@ export async function GET(request: NextRequest) {
 
     if (messageType) {
       where.messageType = messageType
+    }
+
+    if (status) {
+      where.status = status
     }
 
     const [logs, total] = await Promise.all([

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useMemo } from "react"
-import { MessageSquare, Send, Search, Upload, FileText, Plus } from "lucide-react"
+import { MessageSquare, Send, Search, Upload, FileText, Plus, RotateCw } from "lucide-react"
 import PageHeader from "@/components/ui/PageHeader"
 import Button from "@/components/ui/Button"
 import Input from "@/components/ui/Input"
@@ -54,6 +54,8 @@ export default function SmsPage() {
   const [sendProgress, setSendProgress] = useState("")
   const [logSearch, setLogSearch] = useState("")
   const [logTypeFilter, setLogTypeFilter] = useState("")
+  const [logStatusFilter, setLogStatusFilter] = useState("")
+  const [resendingId, setResendingId] = useState<number | null>(null)
 
   // Quick send state
   const [quickMemberId, setQuickMemberId] = useState("")
@@ -103,6 +105,8 @@ export default function SmsPage() {
       const params = new URLSearchParams()
       if (logSearch) params.set("search", logSearch)
       if (logTypeFilter) params.set("messageType", logTypeFilter)
+      if (logStatusFilter) params.set("status", logStatusFilter)
+      params.set("pageSize", "50")
       const res = await fetch(`/api/sms?${params}`)
       if (res.ok) {
         const data = await res.json()
@@ -113,7 +117,7 @@ export default function SmsPage() {
     } finally {
       setLoading(false)
     }
-  }, [logSearch, logTypeFilter])
+  }, [logSearch, logTypeFilter, logStatusFilter])
 
   const fetchTemplates = useCallback(async () => {
     try {
@@ -297,6 +301,33 @@ export default function SmsPage() {
     )
   }
 
+  /** Re-sends a single message that never went out (Failed or stuck Pending). */
+  const handleResend = async (id: number) => {
+    setResendingId(id)
+    try {
+      const res = await fetch("/api/sms/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ logIds: [id] }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        alert(data.error || "Failed to resend")
+        return
+      }
+      alert(
+        data.failed > 0
+          ? `Resend failed — the gateway still rejected this message${data.error ? `: ${data.error}` : ""}`
+          : "Message resent successfully"
+      )
+      fetchLogs()
+    } catch {
+      alert("Failed to resend")
+    } finally {
+      setResendingId(null)
+    }
+  }
+
   const handleSaveTemplate = async () => {
     if (!templateForm.templateName.trim() || !templateForm.messageBody.trim()) {
       setTemplateErrors({ name: "Name and body are required" })
@@ -355,6 +386,27 @@ export default function SmsPage() {
           {item.status}
         </Badge>
       ),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      className: "text-right",
+      render: (item: SmsLog) =>
+        item.status === "Sent" ? (
+          <span className="text-xs text-gray-400">—</span>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            icon={<RotateCw className="w-3.5 h-3.5" />}
+            onClick={() => handleResend(item.id)}
+            loading={resendingId === item.id}
+            disabled={resendingId !== null}
+            title="Resend this message"
+          >
+            Resend
+          </Button>
+        ),
     },
   ]
 
@@ -588,6 +640,7 @@ export default function SmsPage() {
               </div>
               <div className="w-44">
                 <Select
+                  label="Type"
                   value={logTypeFilter}
                   onChange={(e) => setLogTypeFilter(e.target.value)}
                   options={[
@@ -595,6 +648,19 @@ export default function SmsPage() {
                     { value: "General", label: "General" },
                     { value: "Bulk", label: "Bulk" },
                     { value: "Welcome", label: "Welcome" },
+                  ]}
+                />
+              </div>
+              <div className="w-44">
+                <Select
+                  label="Status"
+                  value={logStatusFilter}
+                  onChange={(e) => setLogStatusFilter(e.target.value)}
+                  options={[
+                    { value: "", label: "All Statuses" },
+                    { value: "Failed", label: "Failed" },
+                    { value: "Pending", label: "Pending" },
+                    { value: "Sent", label: "Sent" },
                   ]}
                 />
               </div>
