@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { MessageSquare, Send, Search, Upload, FileText, Plus } from "lucide-react"
 import PageHeader from "@/components/ui/PageHeader"
 import Button from "@/components/ui/Button"
@@ -49,7 +49,9 @@ export default function SmsPage() {
   const [templates, setTemplates] = useState<SmsTemplate[]>([])
   const [logs, setLogs] = useState<SmsLog[]>([])
   const [loading, setLoading] = useState(false)
+  const [membersLoading, setMembersLoading] = useState(false)
   const [sending, setSending] = useState(false)
+  const [sendProgress, setSendProgress] = useState("")
   const [logSearch, setLogSearch] = useState("")
   const [logTypeFilter, setLogTypeFilter] = useState("")
 
@@ -70,18 +72,30 @@ export default function SmsPage() {
   const [templateForm, setTemplateForm] = useState({ templateName: "", templateKey: "", messageBody: "" })
   const [templateErrors, setTemplateErrors] = useState<Record<string, string>>({})
 
+  /** Loads every member (paged through the API) so bulk SMS is never limited
+   *  to the first page of results. Filtering happens client-side. */
   const fetchMembers = useCallback(async () => {
+    setMembersLoading(true)
     try {
-      const params = memberSearch ? `?search=${encodeURIComponent(memberSearch)}&pageSize=20` : "?pageSize=20"
-      const res = await fetch(`/api/members${params}`)
-      if (res.ok) {
+      const all: Member[] = []
+      const pageSize = 200
+      let page = 1
+      let totalPages = 1
+      do {
+        const res = await fetch(`/api/members?page=${page}&pageSize=${pageSize}`)
+        if (!res.ok) break
         const data = await res.json()
-        setMembers(data.data)
-      }
+        all.push(...((data.data as Member[]) || []))
+        totalPages = Number(data.totalPages) || 1
+        page++
+      } while (page <= totalPages && page <= 100)
+      setMembers(all)
     } catch (err) {
       console.error(err)
+    } finally {
+      setMembersLoading(false)
     }
-  }, [memberSearch])
+  }, [])
 
   const fetchLogs = useCallback(async () => {
     setLoading(true)
@@ -112,6 +126,51 @@ export default function SmsPage() {
       console.error(err)
     }
   }, [])
+
+  /** Members matching the bulk-tab search box (all members are already loaded). */
+  const filteredMembers = useMemo(() => {
+    const q = memberSearch.trim().toLowerCase()
+    if (!q) return members
+    return members.filter(
+      (m) =>
+        m.farmerName.toLowerCase().includes(q) ||
+        m.memberCode.toLowerCase().includes(q) ||
+        (m.phoneNumber || "").includes(q)
+    )
+  }, [members, memberSearch])
+
+  /** Members that can actually receive an SMS. */
+  const membersWithPhone = useMemo(() => members.filter((m) => m.phoneNumber), [members])
+  const filteredWithPhone = useMemo(
+    () => filteredMembers.filter((m) => m.phoneNumber),
+    [filteredMembers]
+  )
+
+  const allFilteredSelected =
+    filteredWithPhone.length > 0 && filteredWithPhone.every((m) => selectedMembers.includes(m.id))
+
+  /** Selects every member currently visible (or clears them if all are selected). */
+  const toggleSelectAll = () => {
+    const ids = filteredWithPhone.map((m) => m.id)
+    setSelectedMembers((prev) => {
+      if (ids.every((id) => prev.includes(id))) return prev.filter((id) => !ids.includes(id))
+      return Array.from(new Set([...prev, ...ids]))
+    })
+  }
+
+  const clearSelection = () => setSelectedMembers([])
+
+  /** Recipients the bulk send would hit right now (members + manual numbers, deduped). */
+  const bulkRecipientCount = useMemo(() => {
+    const fromMembers = members
+      .filter((m) => selectedMembers.includes(m.id) && m.phoneNumber)
+      .map((m) => m.phoneNumber as string)
+    const manual = bulkPhoneNumbers
+      .split(/[,\n]/)
+      .map((p) => p.trim())
+      .filter(Boolean)
+    return new Set([...fromMembers, ...manual]).size
+  }, [members, selectedMembers, bulkPhoneNumbers])
 
   useEffect(() => {
     fetchMembers()
@@ -163,7 +222,7 @@ export default function SmsPage() {
     const selectedMemberData = members.filter((m) => selectedMembers.includes(m.id))
     const phones = [
       ...new Set([
-        ...selectedMemberData.map((m) => m.phoneNumber).filter(Boolean),
+        ...selectedMemberData.map((m) => m.phoneNumber).filter(Boolean) as string[],
         ...bulkPhoneNumbers.split(/[,\n]/).map((p) => p.trim()).filter(Boolean),
       ]),
     ]
@@ -176,12 +235,22 @@ export default function SmsPage() {
       alert("Message is required")
       return
     }
+    if (
+      !window.confirm(
+        `Send this message to ${phones.length} phone number${phones.length === 1 ? "" : "s"}?`
+      )
+    ) {
+      return
+    }
 
     setSending(true)
-    try {
-      let sent = 0
-      let failed = 0
-      for (const phone of phones) {
+    setSendProgress(`0 / ${phones.length}`)
+    let sent = 0
+    let failed = 0
+    let next = 0
+
+    const sendOne = async (phone: string) => {
+      try {
         const res = await fetch("/api/sms/send", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -193,7 +262,22 @@ export default function SmsPage() {
         })
         if (res.ok) sent++
         else failed++
+      } catch {
+        failed++
+      } finally {
+        setSendProgress(`${sent + failed} / ${phones.length}`)
       }
+    }
+
+    try {
+      // A few at a time: fast enough for hundreds of members, gentle on the gateway.
+      const workers = Array.from({ length: 5 }, async () => {
+        while (next < phones.length) {
+          const phone = phones[next++]
+          await sendOne(phone)
+        }
+      })
+      await Promise.all(workers)
       alert(`Bulk SMS complete. Sent: ${sent}, Failed: ${failed}`)
       setBulkPhoneNumbers("")
       setBulkMessage("")
@@ -203,6 +287,7 @@ export default function SmsPage() {
       alert("Bulk SMS failed")
     } finally {
       setSending(false)
+      setSendProgress("")
     }
   }
 
@@ -366,35 +451,76 @@ export default function SmsPage() {
                   <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
                     Select Members
                   </label>
-                  <span className="text-xs text-gray-500">{selectedMembers.length} selected</span>
+                  <span className="text-xs text-gray-500">
+                    {selectedMembers.length} selected
+                    {filteredMembers.length !== members.length
+                      ? ` · showing ${filteredMembers.length} of ${members.length}`
+                      : ` · ${members.length} members`}
+                  </span>
                 </div>
                 <Input
                   placeholder="Search members..."
                   value={memberSearch}
                   onChange={(e) => setMemberSearch(e.target.value)}
                 />
+
+                {/* Select all / clear */}
+                <div className="flex items-center gap-3 px-1 py-2 mt-2 border-b border-gray-100 dark:border-gray-800">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={allFilteredSelected}
+                      onChange={toggleSelectAll}
+                      disabled={filteredWithPhone.length === 0}
+                      className="rounded border-gray-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)]"
+                    />
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Select all ({filteredWithPhone.length} with phone numbers)
+                    </span>
+                  </label>
+                  {selectedMembers.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={clearSelection}
+                      className="ml-auto text-xs text-[var(--color-primary)] hover:underline"
+                    >
+                      Clear selection
+                    </button>
+                  )}
+                </div>
+
                 <div className="mt-2 max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg divide-y divide-gray-100 dark:divide-gray-800">
-                  {members.map((m) => (
+                  {filteredMembers.map((m) => (
                     <label
                       key={m.id}
-                      className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer"
+                      className={`flex items-center gap-3 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800/50 ${
+                        m.phoneNumber ? "cursor-pointer" : "cursor-not-allowed opacity-60"
+                      }`}
                     >
                       <input
                         type="checkbox"
                         checked={selectedMembers.includes(m.id)}
+                        disabled={!m.phoneNumber}
                         onChange={() => toggleMemberSelection(m.id)}
-                        className="rounded border-gray-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)]"
+                        className="rounded border-gray-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)] disabled:cursor-not-allowed"
                       />
                       <div>
                         <p className="text-sm font-medium text-gray-900 dark:text-white">{m.farmerName}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{m.memberCode} · {m.phoneNumber}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {m.memberCode} · {m.phoneNumber || "No phone number"}
+                        </p>
                       </div>
                     </label>
                   ))}
-                  {members.length === 0 && (
-                    <p className="px-3 py-4 text-sm text-gray-500 text-center">No members found</p>
+                  {filteredMembers.length === 0 && (
+                    <p className="px-3 py-4 text-sm text-gray-500 text-center">
+                      {membersLoading ? "Loading members..." : "No members found"}
+                    </p>
                   )}
                 </div>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {members.length} members loaded · {membersWithPhone.length} with phone numbers
+                </p>
               </div>
 
               <div>
@@ -423,12 +549,22 @@ export default function SmsPage() {
                 />
               </div>
 
-              <div className="flex justify-end">
+              <div className="flex items-center justify-end gap-3">
+                {sendProgress && (
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    Sending {sendProgress}…
+                  </span>
+                )}
+                {bulkRecipientCount > 0 && (
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    {bulkRecipientCount} recipient{bulkRecipientCount === 1 ? "" : "s"}
+                  </span>
+                )}
                 <Button
                   icon={<Send className="w-4 h-4" />}
                   onClick={handleBulkSend}
                   loading={sending}
-                  disabled={selectedMembers.length === 0 && !bulkPhoneNumbers.trim()}
+                  disabled={sending || (selectedMembers.length === 0 && !bulkPhoneNumbers.trim())}
                 >
                   Send Bulk SMS
                 </Button>
