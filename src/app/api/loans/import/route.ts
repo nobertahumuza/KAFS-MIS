@@ -8,6 +8,7 @@ import {
   computeAllocation,
   computeRepaymentState,
   roundMoney,
+  type Allocation,
 } from "@/lib/loan-repayment"
 
 /** Registering loans from the paper files is office work: Admin and the Loans Officer. */
@@ -42,6 +43,8 @@ interface RowResult {
   finishesOn?: string
   paidInstallments?: number
   totalInstallments?: number
+  /** Money the file shows above the loan's reducing-balance total. */
+  overpayment?: number
 }
 
 function unauthorised() {
@@ -159,6 +162,7 @@ export async function POST(request: NextRequest) {
     let appIndex = Number(lastApp?.applicationCode?.match(/(\d+)$/)?.[1] ?? 0)
 
     const todayKey = dateKey(new Date())
+    const today = new Date()
     const results: RowResult[] = []
 
     for (let i = 0; i < rows.length; i++) {
@@ -268,14 +272,6 @@ export async function POST(request: NextRequest) {
 
         const dueDate = addMonths(startDate, term)
 
-        // How much of the paper history does this lump sum cover?
-        const instalmentsCovered = Math.min(
-          term,
-          Math.floor(amountPaid / monthlyInstallment)
-        )
-        let paymentDate = addMonths(startDate, instalmentsCovered)
-        if (dateKey(paymentDate) > todayKey) paymentDate = new Date(`${todayKey}T12:00:00Z`)
-
         const loan = await prisma.$transaction(async (tx) => {
           const application = await tx.loanApplication.create({
             data: {
@@ -341,11 +337,16 @@ export async function POST(request: NextRequest) {
           await tx.loanRepaymentSchedule.createMany({ data: scheduleRows })
 
           let paidInstallments = 0
+          let overpayment = 0
+          let interestBooked = 0
+          let principalBooked = 0
+          let writtenOffTotal = 0
 
           if (amountPaid > 0) {
-            // Everything collected on paper, booked as one backdated payment so
-            // reducing-balance interest carries on from the right principal.
-            const balanceInput = {
+            // The loan started in the past, so the instalments that have
+            // already come due are booked as the repayments they were,
+            // each one charged on the reducing balance.
+            let balanceInput = {
               id: created.id,
               loanCode: created.loanCode,
               principalAmount: principal,
@@ -353,62 +354,196 @@ export async function POST(request: NextRequest) {
               currentBalance: totalPayable,
               outstandingPrincipal: principal,
               disbursementDate: startDate,
-              lastPaymentDate: null,
+              lastPaymentDate: null as Date | null,
             }
-            const state = computeRepaymentState(balanceInput, paymentDate, 0)
-            const allocation = computeAllocation(balanceInput, state, {
-              amountPaid,
-              finePaid: 0,
-              paymentDate,
-            })
-            if (!allocation.ok) throw new Error(allocation.error)
 
-            const referenceNumber = fileRef
-              ? `FILE-${fileRef}`
-              : generateReference("FILE", Date.now())
-
-            await tx.loanRepayment.create({
-              data: {
-                loanId: created.id,
-                amountPaid,
-                finePaid: allocation.allocation.feePaid,
-                interestPaid: allocation.allocation.interestPaid,
-                principalPaid: allocation.allocation.principalPaid,
-                balanceAfter: allocation.allocation.newBalance,
-                paymentDate,
-                recordedBy: userId,
-                referenceNumber,
-              },
-            })
-
-            await tx.loan.update({
-              where: { id: created.id },
-              data: {
-                currentBalance: allocation.allocation.newBalance,
-                outstandingPrincipal: allocation.allocation.newOutstandingPrincipal,
-                ...(allocation.allocation.loanCleared ? { loanStatus: "Cleared" } : {}),
-              },
-            })
-
-            // Settle whole instalments in date order, then any remainder as partial.
-            let remaining = amountPaid
-            const scheduleRows = await tx.loanRepaymentSchedule.findMany({
+            const bookedRows = await tx.loanRepaymentSchedule.findMany({
               where: { loanId: created.id },
               orderBy: { installmentNo: "asc" },
             })
-            for (const schedule of scheduleRows) {
-              if (remaining <= 0) break
-              const expected = schedule.totalAmount ?? 0
-              const applied = Math.min(remaining, expected)
-              const paidSoFar = (schedule.amountPaid ?? 0) + applied
-              const fullyPaid = expected > 0 ? paidSoFar >= expected - 0.005 : paidSoFar > 0
-              await tx.loanRepaymentSchedule.update({
-                where: { id: schedule.id },
-                data: { amountPaid: paidSoFar, status: fullyPaid ? "Paid" : "Partial" },
+
+            const baseReference = fileRef
+              ? `FILE-${fileRef}`
+              : generateReference("FILE", Date.now())
+            let remaining = roundMoney(amountPaid)
+
+            /** Write one repayment, its schedule row and its audit entries. */
+            const bookRepayment = async (
+              payment: number,
+              allocation: Allocation,
+              paymentDate: Date,
+              referenceNumber: string,
+              rowIndex: number
+            ) => {
+              await tx.loanRepayment.create({
+                data: {
+                  loanId: created.id,
+                  amountPaid: payment,
+                  finePaid: allocation.feePaid,
+                  interestPaid: allocation.interestPaid,
+                  principalPaid: allocation.principalPaid,
+                  balanceAfter: allocation.newBalance,
+                  paymentDate,
+                  recordedBy: userId,
+                  referenceNumber,
+                },
               })
-              remaining = roundMoney(remaining - applied)
-              if (fullyPaid) paidInstallments++
+
+              await tx.loan.update({
+                where: { id: created.id },
+                data: {
+                  currentBalance: allocation.newBalance,
+                  outstandingPrincipal: allocation.newOutstandingPrincipal,
+                  ...(allocation.loanCleared ? { loanStatus: "Cleared" } : {}),
+                },
+              })
+
+              // Rewrite the row with what actually happened, so the
+              // schedule shows the payments on the reducing balance.
+              const row = bookedRows[rowIndex]
+              if (row) {
+                const settled =
+                  allocation.loanCleared ||
+                  payment >= (row.totalAmount ?? 0) - 0.005
+                await tx.loanRepaymentSchedule.update({
+                  where: { id: row.id },
+                  data: {
+                    amountPaid: payment,
+                    principalAmount: allocation.principalPaid,
+                    interestAmount: allocation.interestPaid,
+                    balance: allocation.newBalance,
+                    status: settled ? "Paid" : "Partial",
+                  },
+                })
+              }
+
+              await tx.auditTrail.create({
+                data: {
+                  userId,
+                  actionType: "LoanRepayment",
+                  description:
+                    `Repayment of UGX ${payment.toLocaleString()} for loan ${created.loanCode} ` +
+                    `(interest UGX ${allocation.interestPaid.toLocaleString()}, ` +
+                    `principal UGX ${allocation.principalPaid.toLocaleString()}, ` +
+                    `fees UGX ${allocation.feePaid.toLocaleString()})` +
+                    (fileRef ? ` - from file ${fileRef}` : ""),
+                  amount: payment,
+                  memberId: member.id,
+                  referenceNumber,
+                  tableName: "loan_repayments",
+                  recordId: created.id,
+                },
+              })
+
+              if (allocation.writtenOff > 0) {
+                writtenOffTotal = roundMoney(writtenOffTotal + allocation.writtenOff)
+                await tx.auditTrail.create({
+                  data: {
+                    userId,
+                    actionType: "LoanWriteOff",
+                    description:
+                      `Booked interest of UGX ${allocation.writtenOff.toLocaleString()} written off on loan ` +
+                      `${created.loanCode} because outstanding principal was cleared before all booked interest accrued`,
+                    amount: allocation.writtenOff,
+                    memberId: member.id,
+                    referenceNumber,
+                    tableName: "loans",
+                    recordId: created.id,
+                  },
+                })
+              }
             }
+
+            // One repayment per instalment that has already come due.
+            for (let n = 1; n <= term; n++) {
+              if (remaining <= 0) break
+              const due = addMonths(startDate, n)
+              if (dateKey(due) > todayKey) break // not due yet on paper
+
+              const state = computeRepaymentState(balanceInput, due, 0)
+              if (state.maxAmountPaid <= 0) break
+
+              // A paper file only says how much was collected in total, so
+              // each instalment is booked for the scheduled amount — or the
+              // payoff amount when that is all the loan has left. The
+              // arithmetic stays unrounded (like the schedule amounts
+              // elsewhere in the app) so a file total rounded to whole
+              // shillings still settles whole instalments.
+              const payment = Math.min(
+                remaining,
+                monthlyInstallment,
+                state.maxAmountPaid
+              )
+              if (payment < 0.01) break
+
+              const allocation = computeAllocation(balanceInput, state, {
+                amountPaid: payment,
+                finePaid: 0,
+                paymentDate: due,
+              })
+              if (!allocation.ok) throw new Error(allocation.error)
+
+              await bookRepayment(
+                payment,
+                allocation.allocation,
+                due,
+                `${baseReference}-${String(n).padStart(2, "0")}`,
+                n - 1
+              )
+
+              interestBooked = roundMoney(interestBooked + allocation.allocation.interestPaid)
+              principalBooked = roundMoney(principalBooked + allocation.allocation.principalPaid)
+              balanceInput = {
+                ...balanceInput,
+                currentBalance: allocation.allocation.newBalance,
+                outstandingPrincipal: allocation.allocation.newOutstandingPrincipal,
+                lastPaymentDate: due,
+              }
+              remaining = remaining - payment
+              if (allocation.allocation.loanCleared) {
+                paidInstallments++
+                break
+              }
+              if (payment >= monthlyInstallment - 0.005) paidInstallments++
+            }
+
+            // Money collected that no due instalment can take (for example a
+            // part-payment made before its due date) is booked today.
+            if (remaining > 0) {
+              const state = computeRepaymentState(balanceInput, today, 0)
+              const payment = Math.min(remaining, state.maxAmountPaid)
+              if (payment >= 0.01) {
+                const allocation = computeAllocation(balanceInput, state, {
+                  amountPaid: payment,
+                  finePaid: 0,
+                  paymentDate: today,
+                })
+                if (!allocation.ok) throw new Error(allocation.error)
+
+                await bookRepayment(
+                  payment,
+                  allocation.allocation,
+                  today,
+                  `${baseReference}-PART`,
+                  paidInstallments
+                )
+
+                interestBooked = roundMoney(interestBooked + allocation.allocation.interestPaid)
+                principalBooked = roundMoney(principalBooked + allocation.allocation.principalPaid)
+                const nextRow = bookedRows[paidInstallments]
+                if (
+                  allocation.allocation.loanCleared ||
+                  payment >= (nextRow?.totalAmount ?? 0) - 0.005
+                ) {
+                  paidInstallments++
+                }
+                remaining = remaining - payment
+              }
+            }
+
+            // Anything still left is more than the loan's reducing-balance
+            // total: the file shows money the engine cannot charge interest on.
+            overpayment = roundMoney(Math.max(0, remaining))
           }
 
           await tx.auditTrail.create({
@@ -418,15 +553,26 @@ export async function POST(request: NextRequest) {
               description:
                 `Loan ${created.loanCode} registered from ${fileRef ?? "data entry form"} for ` +
                 `${member.farmerName} (${member.memberCode}) - principal UGX ${principal.toLocaleString()}, ` +
-                `${term} months from ${dateKey(startDate)}, paid to date UGX ${amountPaid.toLocaleString()}`,
+                `${term} months from ${dateKey(startDate)}. ` +
+                (amountPaid > 0
+                  ? `${paidInstallments} of ${term} instalments collected to date: UGX ${roundMoney(interestBooked + principalBooked).toLocaleString()} ` +
+                    `(interest UGX ${interestBooked.toLocaleString()}, principal UGX ${principalBooked.toLocaleString()}). ` +
+                    (writtenOffTotal > 0
+                      ? `UGX ${writtenOffTotal.toLocaleString()} of booked interest written off. `
+                      : "") +
+                    (overpayment > 0
+                      ? `UGX ${overpayment.toLocaleString()} shown on the file is above the loan's reducing-balance total - check the figures on the file.`
+                      : "")
+                  : "Nothing collected yet."),
               amount: principal,
               memberId: member.id,
+              referenceNumber: fileRef ? `FILE-${fileRef}` : null,
               tableName: "loans",
               recordId: created.id,
             },
           })
 
-          return { loan: created, paidInstallments }
+          return { loan: created, paidInstallments, overpayment }
         },
         // A loan is many inserts; give the batch room before Prisma gives up.
         { timeout: 60_000, maxWait: 10_000 }
@@ -441,6 +587,7 @@ export async function POST(request: NextRequest) {
           finishesOn: dateKey(dueDate),
           paidInstallments: loan.paidInstallments,
           totalInstallments: term,
+          overpayment: loan.overpayment,
         })
       } catch (error) {
         results.push(fail(error instanceof Error ? error.message : "Could not import this loan"))

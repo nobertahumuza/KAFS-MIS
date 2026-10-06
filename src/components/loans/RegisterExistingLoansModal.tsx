@@ -26,6 +26,7 @@ interface RowResult {
   error?: string
   finishesOn?: string
   totalInstallments?: number
+  overpayment?: number
 }
 
 interface MemberOption {
@@ -178,6 +179,13 @@ export default function RegisterExistingLoansModal({ open, onClose, onImported }
               {result.totalInstallments} instalments · finishes{" "}
               {result.finishesOn ? formatDate(result.finishesOn) : "—"}
             </p>
+            {result.overpayment ? (
+              <p className="mt-2 font-medium text-amber-700 dark:text-amber-400">
+                UGX {result.overpayment.toLocaleString()} of what the file shows is
+                above the loan&apos;s reducing-balance total — check the figures on
+                the file.
+              </p>
+            ) : null}
           </div>
         )}
 
