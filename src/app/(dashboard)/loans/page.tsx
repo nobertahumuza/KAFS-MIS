@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { useSession } from "next-auth/react"
 import {
   Search, Plus, ChevronDown, ChevronUp, DollarSign, AlertTriangle,
-  Clock, BadgeCheck, Landmark, X, Banknote
+  Clock, BadgeCheck, Landmark, X, Banknote, FileSpreadsheet
 } from "lucide-react"
 import PageHeader from "@/components/ui/PageHeader"
 import Table from "@/components/ui/Table"
@@ -13,6 +13,7 @@ import Button from "@/components/ui/Button"
 import Input from "@/components/ui/Input"
 import Select from "@/components/ui/Select"
 import Modal from "@/components/ui/Modal"
+import RegisterExistingLoansModal from "@/components/loans/RegisterExistingLoansModal"
 import { MetricCard } from "@/components/ui/Card"
 import { formatUGX, formatDate, formatDateTime } from "@/lib/utils"
 import { ROLES } from "@/lib/constants"
@@ -49,6 +50,12 @@ interface Loan {
   nextDue: NextDue | null
   pendingFinesCount: number
   lastPayment: { amountPaid: number; paymentDate: string } | null
+  timeRemaining?: {
+    paidInstallments: number
+    totalInstallments: number
+    remainingInstallments: number
+    finishesOn: string | null
+  }
 }
 
 interface LoanSummaryInfo {
@@ -170,6 +177,9 @@ export default function LoansPage() {
   const { data: session } = useSession()
   // Only the Loans Officer registers that a borrower has paid.
   const canRecordRepayment = session?.user?.role === ROLES.LOANS_OFFICER
+  // Bringing the paper files online is officer/admin data entry.
+  const canRegisterExisting =
+    session?.user?.role === ROLES.LOANS_OFFICER || session?.user?.role === ROLES.ADMIN
 
   const [loans, setLoans] = useState<Loan[]>([])
   const [summary, setSummary] = useState<LoanSummary>({
@@ -187,6 +197,7 @@ export default function LoansPage() {
   const [total, setTotal] = useState(0)
 
   const [disburseModalOpen, setDisburseModalOpen] = useState(false)
+  const [importModalOpen, setImportModalOpen] = useState(false)
   const [disburseForm, setDisburseForm] = useState<DisburseForm>(initialDisburseForm)
   const [disburseErrors, setDisburseErrors] = useState<Partial<Record<keyof DisburseForm, string>>>({})
   const [submitting, setSubmitting] = useState(false)
@@ -529,6 +540,27 @@ export default function LoansPage() {
       },
     },
     {
+      key: "timeRemaining",
+      header: "Time Left",
+      render: (item: Row) => {
+        const loan = item as unknown as Loan
+        const remaining = loan.timeRemaining
+        if (!remaining || remaining.totalInstallments === 0) {
+          return <span className="text-gray-400">—</span>
+        }
+        return (
+          <div>
+            <p className="text-xs font-medium">
+              {remaining.remainingInstallments} of {remaining.totalInstallments} instalments left
+            </p>
+            <p className="text-xs text-gray-500">
+              {remaining.finishesOn ? `Finishes ${formatDate(remaining.finishesOn)}` : "No due date"}
+            </p>
+          </div>
+        )
+      },
+    },
+    {
       key: "repaymentStatus",
       header: "Payment",
       render: (item: Row) => {
@@ -588,9 +620,20 @@ export default function LoansPage() {
         title="Loans"
         subtitle={`${total} total loans`}
         actions={
-          <Button icon={<Plus className="w-4 h-4" />} onClick={() => setDisburseModalOpen(true)}>
-            Disburse Loan
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {canRegisterExisting && (
+              <Button
+                variant="outline"
+                icon={<FileSpreadsheet className="w-4 h-4" />}
+                onClick={() => setImportModalOpen(true)}
+              >
+                Register Existing Loans
+              </Button>
+            )}
+            <Button icon={<Plus className="w-4 h-4" />} onClick={() => setDisburseModalOpen(true)}>
+              Disburse Loan
+            </Button>
+          </div>
         }
       />
 
@@ -831,6 +874,13 @@ export default function LoansPage() {
           </div>
         )}
       </div>
+
+      {/* Register Existing Loans (paper files → online) */}
+      <RegisterExistingLoansModal
+        open={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        onImported={fetchLoans}
+      />
 
       {/* Disburse Loan Modal */}
       <Modal

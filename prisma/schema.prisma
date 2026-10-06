@@ -291,6 +291,8 @@ model Loan {
   interestRate       Float    @default(10) @map("interest_rate")
   currentBalance     Float    @map("current_balance")
   loanPurpose        String?  @map("loan_purpose")
+  /** Where this loan came from: a file reference, "form", or null when disbursed in the app. */
+  importedFrom       String?  @map("imported_from")
   loanStatus         String?  @default("Active") @map("loan_status")
   loanType           String?  @default("Regular") @map("loan_type")
   outstandingPrincipal Float   @default(0) @map("outstanding_principal")

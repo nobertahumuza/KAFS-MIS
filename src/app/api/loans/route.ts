@@ -59,6 +59,10 @@ export async function GET(request: NextRequest) {
           fines: {
             where: { status: "Pending" },
           },
+          // How many instalments are already settled — used for "time remaining".
+          _count: {
+            select: { repaymentSchedules: { where: { status: "Paid" } } },
+          },
         },
         orderBy: { createdAt: "desc" },
         skip: (page - 1) * pageSize,
@@ -85,6 +89,19 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       data: loans.map((loan) => {
+        // Whole months from disbursement to due date = the term that was booked.
+        const monthSpan = (from: Date, to: Date | null) => {
+          if (!to) return 0
+          let months =
+            (to.getUTCFullYear() - from.getUTCFullYear()) * 12 +
+            (to.getUTCMonth() - from.getUTCMonth())
+          if (to.getUTCDate() < from.getUTCDate()) months -= 1
+          return Math.max(0, months)
+        }
+        const paidInstallments = loan._count.repaymentSchedules
+        const totalInstallments = monthSpan(loan.disbursementDate, loan.dueDate)
+        const remainingInstallments = Math.max(0, totalInstallments - paidInstallments)
+
         const nextSchedule = loan.repaymentSchedules[0]
         const dueForStatus = nextSchedule?.dueDate ?? loan.dueDate
         const isOverdue = loan.loanStatus === "Active" && !!dueForStatus && dueForStatus < now
@@ -109,6 +126,13 @@ export async function GET(request: NextRequest) {
               }
             : null,
           pendingFinesCount: loan.fines.length,
+          // Everything the officer needs to say how much of the loan is left.
+          timeRemaining: {
+            paidInstallments,
+            totalInstallments,
+            remainingInstallments,
+            finishesOn: loan.dueDate?.toISOString() ?? null,
+          },
           lastPayment: loan.repayments[0]
             ? {
                 amountPaid: loan.repayments[0].amountPaid,
