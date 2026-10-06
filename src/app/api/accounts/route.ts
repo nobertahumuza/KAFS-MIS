@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
       idDocumentType,
       idDocumentNumber,
       openingBalance = 0,
-      status = "Draft",
+      status = "Active",
     } = body
 
     if (!accountType) {
@@ -211,7 +211,7 @@ export async function POST(request: NextRequest) {
         beneficiary: beneficiary?.trim() || null,
         idDocumentType: idDocumentType || null,
         idDocumentNumber: idDocumentNumber?.trim() || null,
-        status: status || "Draft",
+        status: status || "Active",
       },
       include: {
         member: {

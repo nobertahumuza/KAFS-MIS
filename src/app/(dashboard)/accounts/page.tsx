@@ -77,7 +77,7 @@ const initialForm: FormData = {
   beneficiary: "",
   idDocumentType: "",
   idDocumentNumber: "",
-  status: "Draft",
+  status: "Active",
   openingBalance: "",
 }
 
