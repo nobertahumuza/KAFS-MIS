@@ -627,7 +627,7 @@ export default function LoansPage() {
                 icon={<FileSpreadsheet className="w-4 h-4" />}
                 onClick={() => setImportModalOpen(true)}
               >
-                Register Existing Loans
+                Register Existing Loan
               </Button>
             )}
             <Button icon={<Plus className="w-4 h-4" />} onClick={() => setDisburseModalOpen(true)}>
