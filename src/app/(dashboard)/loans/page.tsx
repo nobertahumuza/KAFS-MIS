@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from "react"
 import { useSession } from "next-auth/react"
 import {
   Search, Plus, ChevronDown, ChevronUp, DollarSign, AlertTriangle,
-  Clock, BadgeCheck, Landmark, X, Banknote, FileSpreadsheet
+  Clock, BadgeCheck, Landmark, X, Banknote, FileSpreadsheet,
+  Pencil, Trash2
 } from "lucide-react"
 import PageHeader from "@/components/ui/PageHeader"
 import Table from "@/components/ui/Table"
@@ -180,6 +181,10 @@ export default function LoansPage() {
   // Bringing the paper files online is officer/admin data entry.
   const canRegisterExisting =
     session?.user?.role === ROLES.LOANS_OFFICER || session?.user?.role === ROLES.ADMIN
+  // Loan details are edited by the officer or admin; removal is admin-only.
+  const canEditLoan =
+    session?.user?.role === ROLES.LOANS_OFFICER || session?.user?.role === ROLES.ADMIN
+  const canDeleteLoan = session?.user?.role === ROLES.ADMIN
 
   const [loans, setLoans] = useState<Loan[]>([])
   const [summary, setSummary] = useState<LoanSummary>({
@@ -221,6 +226,28 @@ export default function LoansPage() {
   const [repayPreview, setRepayPreview] = useState<RepayPreview | null>(null)
   const [repayPreviewError, setRepayPreviewError] = useState("")
   const [repayPreviewLoading, setRepayPreviewLoading] = useState(false)
+
+  // Edit / delete loan
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [editLoan, setEditLoan] = useState<Loan | null>(null)
+  const [editForm, setEditForm] = useState({
+    purpose: "",
+    interestRate: "",
+    status: "",
+    dueDate: "",
+    principalAmount: "",
+    termMonths: "",
+    disbursementDate: "",
+  })
+  const [editHasRepayments, setEditHasRepayments] = useState(false)
+  const [editSubmitting, setEditSubmitting] = useState(false)
+  const [editError, setEditError] = useState("")
+
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [deleteLoan, setDeleteLoan] = useState<Loan | null>(null)
+  const [deleteTotalPaid, setDeleteTotalPaid] = useState(0)
+  const [deleteError, setDeleteError] = useState("")
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false)
 
   const fetchLoans = useCallback(async () => {
     setLoading(true)
@@ -450,6 +477,121 @@ export default function LoansPage() {
     }
   }
 
+  const openEditModal = async (loan: Loan) => {
+    setEditLoan(loan)
+    setEditError("")
+    setEditSubmitting(false)
+    try {
+      const res = await fetch(`/api/loans/${loan.id}`)
+      const detail = await res.json().catch(() => ({}))
+      setEditForm({
+        purpose: detail.loanPurpose || "",
+        interestRate: String(detail.interestRate ?? loan.interestRate),
+        status: detail.loanStatus || "Active",
+        dueDate: (detail.dueDate || "").split("T")[0],
+        principalAmount: String(detail.principalAmount ?? loan.principalAmount),
+        termMonths: String(
+          detail.summary?.termMonths ?? detail.repaymentSchedules?.length ?? 0
+        ),
+        disbursementDate: (detail.disbursementDate || "").split("T")[0],
+      })
+      setEditHasRepayments((detail.repayments?.length ?? 0) > 0)
+    } catch {
+      setEditForm({
+        purpose: loan.loanPurpose || "",
+        interestRate: String(loan.interestRate),
+        status: loan.loanStatus || "Active",
+        dueDate: (loan.dueDate || "").split("T")[0],
+        principalAmount: String(loan.principalAmount),
+        termMonths: String(loan.timeRemaining?.totalInstallments ?? 0),
+        disbursementDate: (loan.disbursementDate || "").split("T")[0],
+      })
+      setEditHasRepayments(loan.lastPayment !== null)
+    }
+    setEditModalOpen(true)
+  }
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editLoan) return
+
+    setEditSubmitting(true)
+    setEditError("")
+    try {
+      const payload: Record<string, unknown> = {
+        loanPurpose: editForm.purpose,
+        interestRate: parseFloat(editForm.interestRate),
+        loanStatus: editForm.status,
+        dueDate: editForm.dueDate,
+      }
+      // The booked terms can only change while nothing has
+      // been collected on the loan.
+      if (!editHasRepayments) {
+        payload.principalAmount = parseFloat(editForm.principalAmount)
+        payload.termMonths = parseInt(editForm.termMonths)
+        payload.disbursementDate = editForm.disbursementDate
+      }
+
+      const res = await fetch(`/api/loans/${editLoan.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to update loan")
+      }
+      setEditModalOpen(false)
+      fetchLoans()
+      if (expandedLoanId === editLoan.id) {
+        const detailRes = await fetch(`/api/loans/${editLoan.id}`)
+        if (detailRes.ok) setLoanDetail(await detailRes.json())
+      }
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Failed to update loan")
+    } finally {
+      setEditSubmitting(false)
+    }
+  }
+
+  const openDeleteModal = async (loan: Loan) => {
+    setDeleteLoan(loan)
+    setDeleteError("")
+    setDeleteSubmitting(false)
+    let totalPaid = 0
+    try {
+      const res = await fetch(`/api/loans/${loan.id}`)
+      const detail = await res.json().catch(() => ({}))
+      totalPaid = detail.summary?.totalPaid ?? 0
+    } catch {
+      totalPaid = 0
+    }
+    setDeleteTotalPaid(totalPaid)
+    setDeleteModalOpen(true)
+  }
+
+  const handleDeleteSubmit = async () => {
+    if (!deleteLoan) return
+
+    setDeleteSubmitting(true)
+    setDeleteError("")
+    try {
+      const res = await fetch(`/api/loans/${deleteLoan.id}`, { method: "DELETE" })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to delete loan")
+      }
+      setDeleteModalOpen(false)
+      setExpandedLoanId(null)
+      setLoanDetail(null)
+      fetchLoans()
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Failed to delete loan")
+    } finally {
+      setDeleteSubmitting(false)
+    }
+  }
+
   const principalAmount = parseFloat(disburseForm.principalAmount) || 0
   const interestRate = parseFloat(disburseForm.interestRate) || 2.5
   const duration = parseInt(disburseForm.duration) || 12
@@ -586,6 +728,18 @@ export default function LoansPage() {
         const loan = item as unknown as Loan
         return (
           <div className="flex items-center justify-end gap-1">
+            {canEditLoan && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  openEditModal(loan)
+                }}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 transition-colors"
+                title="Edit Loan"
+              >
+                <Pencil className="w-4 h-4" />
+              </button>
+            )}
             {canRecordRepayment && (
               <button
                 onClick={(e) => {
@@ -608,6 +762,18 @@ export default function LoansPage() {
             >
               {expandedLoanId === loan.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </button>
+            {canDeleteLoan && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  openDeleteModal(loan)
+                }}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                title="Delete Loan"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
           </div>
         )
       },
@@ -1133,6 +1299,186 @@ export default function LoansPage() {
             <Button type="submit" loading={submitting}>Record Payment</Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Edit Loan Modal */}
+      <Modal
+        open={editModalOpen}
+        onClose={() => setEditModalOpen(false)}
+        title={`Edit Loan — ${editLoan?.loanCode ?? ""}`}
+        size="md"
+      >
+        <form onSubmit={handleEditSubmit} className="space-y-4">
+          {editError && (
+            <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+              <p className="text-sm text-red-600 dark:text-red-400">{editError}</p>
+            </div>
+          )}
+
+          {editLoan && (
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              {editLoan.member.farmerName} ({editLoan.member.memberCode}) — current balance{" "}
+              {formatUGX(editLoan.currentBalance)}
+            </p>
+          )}
+
+          {!editHasRepayments ? (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Input
+                  label="Principal Amount (UGX) *"
+                  type="number"
+                  min="1"
+                  value={editForm.principalAmount}
+                  onChange={(e) =>
+                    setEditForm((f) => ({ ...f, principalAmount: e.target.value }))
+                  }
+                />
+                <Input
+                  label="Interest Rate (%)*"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={editForm.interestRate}
+                  onChange={(e) =>
+                    setEditForm((f) => ({ ...f, interestRate: e.target.value }))
+                  }
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Input
+                  label="Duration (months) *"
+                  type="number"
+                  min="1"
+                  value={editForm.termMonths}
+                  onChange={(e) =>
+                    setEditForm((f) => ({ ...f, termMonths: e.target.value }))
+                  }
+                />
+                <Input
+                  label="Date Given *"
+                  type="date"
+                  value={editForm.disbursementDate}
+                  onChange={(e) =>
+                    setEditForm((f) => ({ ...f, disbursementDate: e.target.value }))
+                  }
+                />
+              </div>
+            </>
+          ) : (
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              This loan already has repayments recorded, so the amount, rate, term
+              and dates are locked. Only the details below can be edited.
+            </p>
+          )}
+
+          <Input
+            label="Purpose"
+            value={editForm.purpose}
+            onChange={(e) =>
+              setEditForm((f) => ({ ...f, purpose: e.target.value }))
+            }
+            placeholder="Loan purpose..."
+          />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Select
+              label="Status"
+              value={editForm.status}
+              onChange={(e) =>
+                setEditForm((f) => ({ ...f, status: e.target.value }))
+              }
+              options={[
+                { value: "Active", label: "Active" },
+                { value: "Cleared", label: "Cleared" },
+              ]}
+            />
+            <Input
+              label="Due Date"
+              type="date"
+              value={editForm.dueDate}
+              onChange={(e) =>
+                setEditForm((f) => ({ ...f, dueDate: e.target.value }))
+              }
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <Button type="button" variant="ghost" onClick={() => setEditModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" loading={editSubmitting}>Save Changes</Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Delete Loan Modal */}
+      <Modal
+        open={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        title="Delete Loan"
+        size="sm"
+      >
+        {deleteLoan && (
+          <div className="space-y-4">
+            {deleteError && (
+              <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                <p className="text-sm text-red-600 dark:text-red-400">{deleteError}</p>
+              </div>
+            )}
+
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              Remove loan{" "}
+              <span className="font-semibold">{deleteLoan.loanCode}</span> for{" "}
+              <span className="font-semibold">{deleteLoan.member.farmerName}</span>{" "}
+              ({deleteLoan.member.memberCode})?
+            </p>
+
+            <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-3 space-y-1.5 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-500 dark:text-gray-400">Principal</span>
+                <span className="font-medium">{formatUGX(deleteLoan.principalAmount)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500 dark:text-gray-400">Current balance</span>
+                <span className="font-medium">{formatUGX(deleteLoan.currentBalance)}</span>
+              </div>
+              {deleteTotalPaid > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500 dark:text-gray-400">Collected so far</span>
+                  <span className="font-medium">{formatUGX(deleteTotalPaid)}</span>
+                </div>
+              )}
+            </div>
+
+            {deleteTotalPaid > 0 ? (
+              <p className="text-sm text-red-600 dark:text-red-400">
+                This loan has repayments recorded, so it cannot be deleted —
+                collected money must stay in the books.
+              </p>
+            ) : (
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                The disbursement, repayment schedule, application and audit
+                records for this loan are removed with it. This cannot be undone.
+              </p>
+            )}
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <Button type="button" variant="ghost" onClick={() => setDeleteModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                loading={deleteSubmitting}
+                disabled={deleteTotalPaid > 0}
+                onClick={handleDeleteSubmit}
+              >
+                Delete Loan
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   )

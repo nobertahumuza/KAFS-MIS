@@ -357,7 +357,11 @@ export async function POST(request: NextRequest) {
       }
 
       return created
-    })
+    },
+    // Neon round-trips can be slow — the default 5s
+    // transaction timeout is not enough for the writes.
+    { timeout: 60_000, maxWait: 10_000 }
+  )
 
     smsLoanRepayment(loan.memberId, Number(amountPaid), allocation.newBalance, referenceNumber)
     notifyLoanRepaid(loan.memberId, loan.member.farmerName, Number(amountPaid), referenceNumber)
