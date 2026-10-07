@@ -121,6 +121,18 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error("Daily report cron error:", error)
+    // Record the failure in the app's audit trail so a missed report
+    // is visible inside the system, not only in the server logs.
+    await prisma.auditTrail
+      .create({
+        data: {
+          actionType: "SystemReport",
+          description: `Daily report failed: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        },
+      })
+      .catch(() => {})
     return NextResponse.json({ error: "Failed to generate daily report" }, { status: 500 })
   }
 }
