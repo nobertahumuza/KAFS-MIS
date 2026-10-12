@@ -13,6 +13,7 @@ import Input from "@/components/ui/Input"
 import Select from "@/components/ui/Select"
 import Modal from "@/components/ui/Modal"
 import { formatUGX, formatDate } from "@/lib/utils"
+import { computeEMIPlan } from "@/lib/loan-repayment"
 
 interface MemberOption {
   id: number
@@ -651,9 +652,10 @@ export default function LoanApplicationsPage() {
                   const amt = parseFloat(wizardData.loanAmount) || 0
                   const rate = parseFloat(wizardData.interestRate) || 10
                   const dur = parseInt(wizardData.loanDuration) || 12
-                  const interest = amt * (rate / 100) * dur
-                  const total = amt + interest
-                  const monthly = dur > 0 ? total / dur : 0
+                  const wizardPlan = computeEMIPlan(amt, rate, dur)
+                  const interest = wizardPlan.totalInterest
+                  const total = wizardPlan.totalPayable
+                  const monthly = wizardPlan.emi
                   return (
                     <>
                       <div className="flex justify-between text-sm">

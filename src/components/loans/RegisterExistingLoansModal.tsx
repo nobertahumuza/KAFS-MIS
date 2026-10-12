@@ -5,6 +5,7 @@ import Modal from "@/components/ui/Modal"
 import Button from "@/components/ui/Button"
 import Input from "@/components/ui/Input"
 import { formatDate, formatUGX } from "@/lib/utils"
+import { computeEMIPlan } from "@/lib/loan-repayment"
 
 /** One loan exactly as POST /api/loans/import expects it. */
 interface ImportRow {
@@ -113,14 +114,15 @@ export default function RegisterExistingLoansModal({ open, onClose, onImported }
     }
   }, [memberSearch])
 
-  // Live maths for the form.
+  // Live maths for the form — the EMI plan the
+  // registration books on the reducing balance.
   const principal = Number(form.principalAmount) || 0
   const rate = Number(form.interestRate) || 0
   const term = Number(form.termMonths) || 0
   const paidSoFar = Number(form.amountPaid) || 0
-  const totalInterest = principal * (rate / 100) * term
-  const totalPayable = principal + totalInterest
-  const monthlyInstallment = term > 0 ? totalPayable / term : 0
+  const emiPlan = computeEMIPlan(principal, rate, term)
+  const totalPayable = emiPlan.totalPayable
+  const monthlyInstallment = emiPlan.emi
   const instalmentsCovered =
     monthlyInstallment > 0 ? Math.min(term, Math.floor(paidSoFar / monthlyInstallment)) : 0
   const startDateObj = form.startDate ? new Date(form.startDate) : null

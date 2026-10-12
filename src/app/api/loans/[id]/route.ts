@@ -3,7 +3,7 @@ import prisma from "@/lib/prisma"
 import { generateApplicationCode } from "@/lib/utils"
 import { getServerSession } from "@/lib/auth"
 import { ROLES } from "@/lib/constants"
-import { computeRepaymentState, roundMoney } from "@/lib/loan-repayment"
+import { computeEMIPlan, computeRepaymentState, roundMoney } from "@/lib/loan-repayment"
 
 const ALLOWED_ROLES: string[] = [ROLES.ADMIN, ROLES.LOANS_OFFICER]
 
@@ -260,9 +260,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     if (wantsTermChange) {
       // Re-book the loan from the new terms and rebuild the
       // instalment plan from scratch.
-      const totalInterest = roundMoney(principal * (rate / 100) * term)
-      const totalPayable = roundMoney(principal + totalInterest)
-      const monthlyInstallment = totalPayable / term
+      const emiPlan = computeEMIPlan(principal, rate, term)
+      const totalPayable = emiPlan.totalPayable
+      const monthlyInstallment = emiPlan.emi
       const newDue = addMonths(start, term)
 
       const firstSchedule = await prisma.loanRepaymentSchedule.findFirst({
@@ -353,20 +353,17 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       }
 
       await prisma.loanRepaymentSchedule.deleteMany({ where: { loanId } })
-      const rows = []
-      for (let n = 1; n <= term; n++) {
-        rows.push({
-          applicationId,
-          loanId,
-          installmentNo: n,
-          dueDate: addMonths(start, n),
-          principalAmount: principal / term,
-          interestAmount: totalInterest / term,
-          totalAmount: monthlyInstallment,
-          balance: totalPayable - monthlyInstallment * n,
-          status: "Pending",
-        })
-      }
+      const rows = emiPlan.rows.map((row) => ({
+        applicationId,
+        loanId,
+        installmentNo: row.installmentNo,
+        dueDate: addMonths(start, row.installmentNo),
+        principalAmount: row.principal,
+        interestAmount: row.interest,
+        totalAmount: row.totalAmount,
+        balance: row.balance,
+        status: "Pending",
+      }))
       if (rows.length > 0) {
         await prisma.loanRepaymentSchedule.createMany({ data: rows })
       }

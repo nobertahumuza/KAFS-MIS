@@ -211,3 +211,77 @@ export function computeAllocation(
     },
   }
 }
+
+/** One row of the EMI plan. Amounts are rounded to 2 decimals. */
+export interface EMIPlanRow {
+  installmentNo: number
+  /** Interest charged on the opening balance for this period. */
+  interest: number
+  /** Instalment minus the interest for this period. */
+  principal: number
+  /** Interest + principal — the amount due. */
+  totalAmount: number
+  /** Balance still owed after this instalment. */
+  balance: number
+}
+
+export interface EMIPlan {
+  /** Fixed monthly instalment. */
+  emi: number
+  totalInterest: number
+  totalPayable: number
+  rows: EMIPlanRow[]
+}
+
+/**
+ * Equal Monthly Instalment plan on the reducing balance:
+ *
+ *   EMI = P × r × (1+r)^n / ((1+r)^n − 1)
+ *
+ * Interest is charged on the opening balance each period, so it
+ * falls as the principal is paid down and the principal component
+ * of every instalment rises. Amounts are rounded to 2 decimals and
+ * the final instalment clears whatever is left, so the loan closes
+ * at exactly zero. A zero rate falls back to equal principal
+ * instalments.
+ */
+export function computeEMIPlan(
+  principal: number,
+  monthlyRatePercent: number,
+  termMonths: number
+): EMIPlan {
+  const p = roundMoney(principal)
+  const n = Math.max(1, Math.floor(termMonths))
+  const r = (monthlyRatePercent || 0) / 100
+
+  const factor = r > 0 ? Math.pow(1 + r, n) : 1
+  const emi = roundMoney(r > 0 ? (p * r * factor) / (factor - 1) : p / n)
+
+  const rows: EMIPlanRow[] = []
+  let opening = p
+  let totalInterest = 0
+
+  for (let i = 1; i <= n; i++) {
+    const interest = roundMoney(opening * r)
+    const principalPaid =
+      i === n ? opening : roundMoney(emi - interest)
+    const totalAmount = roundMoney(interest + principalPaid)
+    opening = roundMoney(opening - principalPaid)
+    totalInterest = roundMoney(totalInterest + interest)
+
+    rows.push({
+      installmentNo: i,
+      interest,
+      principal: principalPaid,
+      totalAmount,
+      balance: Math.max(0, opening),
+    })
+  }
+
+  return {
+    emi,
+    totalInterest,
+    totalPayable: roundMoney(p + totalInterest),
+    rows,
+  }
+}

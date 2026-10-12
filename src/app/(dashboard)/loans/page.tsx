@@ -18,6 +18,7 @@ import RegisterExistingLoansModal from "@/components/loans/RegisterExistingLoans
 import { MetricCard } from "@/components/ui/Card"
 import { formatUGX, formatDate, formatDateTime } from "@/lib/utils"
 import { ROLES } from "@/lib/constants"
+import { computeEMIPlan } from "@/lib/loan-repayment"
 
 interface LoanMember {
   id: number
@@ -595,9 +596,12 @@ export default function LoansPage() {
   const principalAmount = parseFloat(disburseForm.principalAmount) || 0
   const interestRate = parseFloat(disburseForm.interestRate) || 2.5
   const duration = parseInt(disburseForm.duration) || 12
-  const totalInterest = principalAmount * (interestRate / 100) * duration
-  const totalPayable = principalAmount + totalInterest
-  const monthlyInstallment = duration > 0 ? totalPayable / duration : 0
+  // EMI on the reducing balance, matching what the
+  // disbursement endpoint books.
+  const disbursePlan = computeEMIPlan(principalAmount, interestRate, duration)
+  const totalInterest = disbursePlan.totalInterest
+  const totalPayable = disbursePlan.totalPayable
+  const monthlyInstallment = disbursePlan.emi
 
   // Derived payment health of the loan being inspected: overdue / fully paid / partially paid.
   const detailPayStatus: string = (() => {

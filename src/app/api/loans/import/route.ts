@@ -6,6 +6,7 @@ import { getServerSession } from "@/lib/auth"
 import { ROLES } from "@/lib/constants"
 import {
   computeAllocation,
+  computeEMIPlan,
   computeRepaymentState,
   roundMoney,
   type Allocation,
@@ -257,9 +258,9 @@ export async function POST(request: NextRequest) {
           continue
         }
 
-        const totalInterest = roundMoney(principal * (rate / 100) * term)
-        const totalPayable = roundMoney(principal + totalInterest)
-        const monthlyInstallment = totalPayable / term
+        const emiPlan = computeEMIPlan(principal, rate, term)
+        const totalPayable = emiPlan.totalPayable
+        const monthlyInstallment = emiPlan.emi
 
         if (amountPaid > totalPayable) {
           results.push(
@@ -322,15 +323,16 @@ export async function POST(request: NextRequest) {
           const scheduleRows: Prisma.LoanRepaymentScheduleCreateManyInput[] = []
           for (let n = 1; n <= term; n++) {
             const due = addMonths(startDate, n)
+            const row = emiPlan.rows[n - 1]
             scheduleRows.push({
               applicationId: application.id,
               loanId: created.id,
               installmentNo: n,
               dueDate: due,
-              principalAmount: principal / term,
-              interestAmount: totalInterest / term,
-              totalAmount: monthlyInstallment,
-              balance: totalPayable - monthlyInstallment * n,
+              principalAmount: row.principal,
+              interestAmount: row.interest,
+              totalAmount: row.totalAmount,
+              balance: row.balance,
               status: "Pending",
             })
           }

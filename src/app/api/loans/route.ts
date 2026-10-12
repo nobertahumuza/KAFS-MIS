@@ -5,6 +5,7 @@ import { smsLoanDisbursement } from "@/lib/sms"
 import { notifyLoanDisbursed } from "@/lib/notify"
 import { getServerSession } from "@/lib/auth"
 import { ROLES } from "@/lib/constants"
+import { computeEMIPlan } from "@/lib/loan-repayment"
 
 /** Roles that already have a screen reading this endpoint: /loans and
  *  /payment-schedule (Admin, LoansOfficer) and /reports (Admin, Treasurer). */
@@ -183,8 +184,10 @@ export async function POST(request: NextRequest) {
 
     const rate = loanType === "Emergency" ? 10 : (parseFloat(interestRate) || 2.5)
     const loanDuration = loanType === "Emergency" ? 1 : (parseInt(duration) || 12)
-    const totalInterest = principalAmount * (rate / 100) * loanDuration
-    const totalPayable = principalAmount + totalInterest
+    // EMI on the reducing balance: interest is charged on the
+    // opening balance each month, so it falls as the loan is paid.
+    const emiPlan = computeEMIPlan(principalAmount, rate, loanDuration)
+    const totalPayable = emiPlan.totalPayable
 
     const lastLoan = await prisma.loan.findFirst({
       orderBy: { id: "desc" },
@@ -197,7 +200,7 @@ export async function POST(request: NextRequest) {
     }
 
     const loanCode = generateLoanCode(nextIndex)
-    const monthlyInstallment = totalPayable / loanDuration
+    const monthlyInstallment = emiPlan.emi
 
     const now = new Date()
     const dueDate = new Date(now)
@@ -260,28 +263,25 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    const schedulePromises = []
-    for (let i = 1; i <= loanDuration; i++) {
+    const scheduleRows = emiPlan.rows.map((row, index) => {
       const scheduleDate = new Date(now)
-      scheduleDate.setMonth(scheduleDate.getMonth() + i)
+      scheduleDate.setMonth(scheduleDate.getMonth() + index + 1)
 
-      schedulePromises.push(
-        prisma.loanRepaymentSchedule.create({
-          data: {
-            applicationId: application.id,
-            loanId: loan.id,
-            installmentNo: i,
-            dueDate: scheduleDate,
-            principalAmount: principalAmount / loanDuration,
-            interestAmount: totalInterest / loanDuration,
-            totalAmount: monthlyInstallment,
-            balance: totalPayable - monthlyInstallment * i,
-            status: "Pending",
-          },
-        })
-      )
-    }
-    await Promise.all(schedulePromises)
+      return {
+        applicationId: application.id,
+        loanId: loan.id,
+        installmentNo: row.installmentNo,
+        dueDate: scheduleDate,
+        principalAmount: row.principal,
+        interestAmount: row.interest,
+        totalAmount: row.totalAmount,
+        balance: row.balance,
+        status: "Pending",
+      }
+    })
+    // One round-trip: parallel inserts can overload the
+    // pooled connection and drop mid-batch.
+    await prisma.loanRepaymentSchedule.createMany({ data: scheduleRows })
 
     await prisma.auditTrail.create({
       data: {
