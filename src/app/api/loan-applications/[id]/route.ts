@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { smsLoanApproval, smsLoanRejection } from "@/lib/sms"
 import { notifyLoanApproval, notifyLoanRejection } from "@/lib/notify"
+import { computeReducingBalancePlan } from "@/lib/loan-repayment"
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -128,6 +129,29 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
     if (interestRate !== undefined) updateData.interestRate = parseFloat(interestRate)
     if (repaymentMode !== undefined) updateData.repaymentMode = repaymentMode
+
+    // The quoted instalment always follows the reducing-balance plan,
+    // so editing the amount, term or rate re-quotes it from the same
+    // method disbursement will book.
+    if (loanAmount !== undefined || loanDuration !== undefined || interestRate !== undefined) {
+      const effectiveAmount =
+        (loanAmount !== undefined ? parseFloat(loanAmount) : existing.loanAmount) ?? NaN
+      const effectiveDuration =
+        (loanDuration !== undefined ? parseInt(loanDuration) : existing.loanDuration) ?? NaN
+      const effectiveRate =
+        (interestRate !== undefined ? parseFloat(interestRate) : existing.interestRate) ?? NaN
+      if (
+        !isNaN(effectiveAmount) && effectiveAmount > 0 &&
+        !isNaN(effectiveDuration) && effectiveDuration >= 1 &&
+        !isNaN(effectiveRate) && effectiveRate >= 0 && effectiveRate <= 100
+      ) {
+        updateData.monthlyInstallment = computeReducingBalancePlan(
+          effectiveAmount,
+          effectiveRate,
+          effectiveDuration
+        ).firstInstallment
+      }
+    }
 
     const application = await prisma.loanApplication.update({
       where: { id: appId },

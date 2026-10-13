@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { generateApplicationCode } from "@/lib/utils"
 import { notifyLoanApplication } from "@/lib/notify"
+import { computeReducingBalancePlan } from "@/lib/loan-repayment"
 
 export async function GET(request: NextRequest) {
   try {
@@ -111,8 +112,10 @@ export async function POST(request: NextRequest) {
 
     const duration = parseInt(loanDuration) || 12
     const rate = parseFloat(interestRate) || 10
-    const totalInterest = loanAmount * (rate / 100) * duration
-    const monthlyInstallment = (loanAmount + totalInterest) / duration
+    // Reducing balance with equal principal repayments — the same
+    // plan disbursement books, so what the application quotes is
+    // the first instalment the member will actually pay.
+    const monthlyInstallment = computeReducingBalancePlan(loanAmount, rate, duration).firstInstallment
 
     const application = await prisma.loanApplication.create({
       data: {
