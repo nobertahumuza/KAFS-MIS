@@ -162,7 +162,13 @@ interface DisburseForm {
   principalAmount: string
   interestRate: string
   duration: string
+  dateGiven: string
   purpose: string
+}
+
+/** Today as YYYY-MM-DD in the local calendar. */
+function dateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
 }
 
 const initialDisburseForm: DisburseForm = {
@@ -170,6 +176,7 @@ const initialDisburseForm: DisburseForm = {
   principalAmount: "",
   interestRate: "2.5",
   duration: "12",
+  dateGiven: dateKey(new Date()),
   purpose: "",
 }
 
@@ -326,6 +333,11 @@ export default function LoansPage() {
     if (isNaN(rate) || rate < 0) errors.interestRate = "Enter a valid interest rate"
     const dur = parseInt(disburseForm.duration)
     if (isNaN(dur) || dur <= 0) errors.duration = "Enter a valid duration"
+    if (!disburseForm.dateGiven) {
+      errors.dateGiven = "Enter the date the loan was given"
+    } else if (disburseForm.dateGiven > dateKey(new Date())) {
+      errors.dateGiven = "Date given cannot be in the future"
+    }
     setDisburseErrors(errors)
     return Object.keys(errors).length === 0
   }
@@ -344,6 +356,7 @@ export default function LoansPage() {
           principalAmount: parseFloat(disburseForm.principalAmount),
           interestRate: parseFloat(disburseForm.interestRate),
           duration: parseInt(disburseForm.duration),
+          disbursementDate: disburseForm.dateGiven,
           purpose: disburseForm.purpose.trim() || null,
         }),
       })
@@ -596,6 +609,14 @@ export default function LoansPage() {
   const principalAmount = parseFloat(disburseForm.principalAmount) || 0
   const interestRate = parseFloat(disburseForm.interestRate) || 2.5
   const duration = parseInt(disburseForm.duration) || 12
+  // First instalment falls due one calendar month after the date given.
+  const firstDue = (() => {
+    if (!disburseForm.dateGiven) return null
+    const d = new Date(`${disburseForm.dateGiven}T00:00:00`)
+    if (isNaN(d.getTime())) return null
+    d.setMonth(d.getMonth() + 1)
+    return d
+  })()
   // EMI on the reducing balance, matching what the
   // disbursement endpoint books.
   const disbursePlan = computeEMIPlan(principalAmount, interestRate, duration)
@@ -1132,12 +1153,20 @@ export default function LoansPage() {
               min="1"
             />
             <Input
-              label="Purpose"
-              value={disburseForm.purpose}
-              onChange={handleDisburseChange("purpose")}
-              placeholder="Loan purpose..."
+              label="Date Given *"
+              type="date"
+              value={disburseForm.dateGiven}
+              onChange={handleDisburseChange("dateGiven")}
+              error={disburseErrors.dateGiven}
+              max={dateKey(new Date())}
             />
           </div>
+          <Input
+            label="Purpose"
+            value={disburseForm.purpose}
+            onChange={handleDisburseChange("purpose")}
+            placeholder="Loan purpose..."
+          />
 
           {principalAmount > 0 && (
             <div className="p-4 rounded-lg bg-[var(--color-primary)]/5 border border-[var(--color-primary)]/20 space-y-2">
@@ -1157,6 +1186,12 @@ export default function LoansPage() {
                 <span className="text-gray-600 dark:text-gray-400">Monthly Installment</span>
                 <span className="font-semibold">{formatUGX(monthlyInstallment)}</span>
               </div>
+              {firstDue && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600 dark:text-gray-400">First Instalment Due</span>
+                  <span className="font-medium">{formatDate(firstDue)}</span>
+                </div>
+              )}
             </div>
           )}
 

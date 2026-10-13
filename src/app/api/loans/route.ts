@@ -163,7 +163,15 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { memberId, principalAmount, interestRate, duration, purpose, loanType = "Regular" } = body
+    const {
+      memberId,
+      principalAmount,
+      interestRate,
+      duration,
+      purpose,
+      loanType = "Regular",
+      disbursementDate,
+    } = body
 
     if (!memberId) {
       return NextResponse.json({ error: "Member is required" }, { status: 400 })
@@ -176,6 +184,28 @@ export async function POST(request: NextRequest) {
     if (!["Regular", "Emergency"].includes(loanType)) {
       return NextResponse.json({ error: "loanType must be 'Regular' or 'Emergency'" }, { status: 400 })
     }
+
+    // The date the borrower received the money. It anchors the
+    // whole schedule: instalments fall due one calendar month
+    // apart from it. Defaults to today.
+    const givenDate = disbursementDate ? String(disbursementDate).trim() : ""
+    if (givenDate && !/^\d{4}-\d{2}-\d{2}$/.test(givenDate)) {
+      return NextResponse.json({ error: "Date given must be a valid date (YYYY-MM-DD)" }, { status: 400 })
+    }
+    const now = new Date()
+    const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`
+    if (givenDate > todayKey) {
+      return NextResponse.json({ error: "Date given cannot be in the future" }, { status: 400 })
+    }
+    // Noon UTC keeps the calendar day stable in storage
+    // (Prisma stores UTC) — the same way paper-file
+    // registration builds its dates.
+    const givenAt = givenDate
+      ? (() => {
+          const [year, month, day] = givenDate.split("-").map(Number)
+          return new Date(Date.UTC(year, month - 1, day, 12))
+        })()
+      : now
 
     const member = await prisma.member.findUnique({ where: { id: memberId } })
     if (!member) {
@@ -202,9 +232,8 @@ export async function POST(request: NextRequest) {
     const loanCode = generateLoanCode(nextIndex)
     const monthlyInstallment = emiPlan.emi
 
-    const now = new Date()
-    const dueDate = new Date(now)
-    dueDate.setMonth(dueDate.getMonth() + loanDuration)
+    const dueDate = new Date(givenAt)
+    dueDate.setUTCMonth(dueDate.getUTCMonth() + loanDuration)
 
     const lastApp = await prisma.loanApplication.findFirst({
       orderBy: { id: "desc" },
@@ -227,9 +256,9 @@ export async function POST(request: NextRequest) {
         interestRate: rate,
         monthlyInstallment,
         status: "Disbursed",
-        submittedAt: now,
-        disbursedAt: now,
-        disbursementDate: now,
+        submittedAt: givenAt,
+        disbursedAt: givenAt,
+        disbursementDate: givenAt,
         dueDate,
       },
     })
@@ -245,7 +274,7 @@ export async function POST(request: NextRequest) {
         loanPurpose: purpose || null,
         loanType,
         loanStatus: "Active",
-        disbursementDate: now,
+        disbursementDate: givenAt,
         dueDate,
       },
       include: {
@@ -258,14 +287,14 @@ export async function POST(request: NextRequest) {
         applicationId: application.id,
         loanId: loan.id,
         amountDisbursed: principalAmount,
-        disbursementDate: now,
+        disbursementDate: givenAt,
         disbursementMethod: "Cash",
       },
     })
 
     const scheduleRows = emiPlan.rows.map((row, index) => {
-      const scheduleDate = new Date(now)
-      scheduleDate.setMonth(scheduleDate.getMonth() + index + 1)
+      const scheduleDate = new Date(givenAt)
+      scheduleDate.setUTCMonth(scheduleDate.getUTCMonth() + index + 1)
 
       return {
         applicationId: application.id,
