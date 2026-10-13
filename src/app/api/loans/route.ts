@@ -5,7 +5,7 @@ import { smsLoanDisbursement } from "@/lib/sms"
 import { notifyLoanDisbursed } from "@/lib/notify"
 import { getServerSession } from "@/lib/auth"
 import { ROLES } from "@/lib/constants"
-import { computeEMIPlan } from "@/lib/loan-repayment"
+import { computeReducingBalancePlan } from "@/lib/loan-repayment"
 
 /** Roles that already have a screen reading this endpoint: /loans and
  *  /payment-schedule (Admin, LoansOfficer) and /reports (Admin, Treasurer). */
@@ -214,10 +214,11 @@ export async function POST(request: NextRequest) {
 
     const rate = loanType === "Emergency" ? 10 : (parseFloat(interestRate) || 2.5)
     const loanDuration = loanType === "Emergency" ? 1 : (parseInt(duration) || 12)
-    // EMI on the reducing balance: interest is charged on the
-    // opening balance each month, so it falls as the loan is paid.
-    const emiPlan = computeEMIPlan(principalAmount, rate, loanDuration)
-    const totalPayable = emiPlan.totalPayable
+    // Reducing balance with equal principal repayments:
+    // the same principal portion every month, interest
+    // on the opening balance, so payments decline.
+    const plan = computeReducingBalancePlan(principalAmount, rate, loanDuration)
+    const totalPayable = plan.totalPayable
 
     const lastLoan = await prisma.loan.findFirst({
       orderBy: { id: "desc" },
@@ -230,7 +231,7 @@ export async function POST(request: NextRequest) {
     }
 
     const loanCode = generateLoanCode(nextIndex)
-    const monthlyInstallment = emiPlan.emi
+    const monthlyInstallment = plan.firstInstallment
 
     const dueDate = new Date(givenAt)
     dueDate.setUTCMonth(dueDate.getUTCMonth() + loanDuration)
@@ -292,7 +293,7 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    const scheduleRows = emiPlan.rows.map((row, index) => {
+    const scheduleRows = plan.rows.map((row, index) => {
       const scheduleDate = new Date(givenAt)
       scheduleDate.setUTCMonth(scheduleDate.getUTCMonth() + index + 1)
 

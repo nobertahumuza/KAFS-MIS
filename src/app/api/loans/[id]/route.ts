@@ -3,7 +3,7 @@ import prisma from "@/lib/prisma"
 import { generateApplicationCode } from "@/lib/utils"
 import { getServerSession } from "@/lib/auth"
 import { ROLES } from "@/lib/constants"
-import { computeEMIPlan, computeRepaymentState, roundMoney } from "@/lib/loan-repayment"
+import { computeReducingBalancePlan, computeRepaymentState, roundMoney } from "@/lib/loan-repayment"
 
 const ALLOWED_ROLES: string[] = [ROLES.ADMIN, ROLES.LOANS_OFFICER]
 
@@ -260,9 +260,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     if (wantsTermChange) {
       // Re-book the loan from the new terms and rebuild the
       // instalment plan from scratch.
-      const emiPlan = computeEMIPlan(principal, rate, term)
-      const totalPayable = emiPlan.totalPayable
-      const monthlyInstallment = emiPlan.emi
+      const plan = computeReducingBalancePlan(principal, rate, term)
+      const totalPayable = plan.totalPayable
+      const monthlyInstallment = plan.firstInstallment
       const newDue = addMonths(start, term)
 
       const firstSchedule = await prisma.loanRepaymentSchedule.findFirst({
@@ -353,7 +353,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       }
 
       await prisma.loanRepaymentSchedule.deleteMany({ where: { loanId } })
-      const rows = emiPlan.rows.map((row) => ({
+      const rows = plan.rows.map((row) => ({
         applicationId,
         loanId,
         installmentNo: row.installmentNo,

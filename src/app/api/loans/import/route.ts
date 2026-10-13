@@ -6,7 +6,7 @@ import { getServerSession } from "@/lib/auth"
 import { ROLES } from "@/lib/constants"
 import {
   computeAllocation,
-  computeEMIPlan,
+  computeReducingBalancePlan,
   computeRepaymentState,
   roundMoney,
   type Allocation,
@@ -258,9 +258,12 @@ export async function POST(request: NextRequest) {
           continue
         }
 
-        const emiPlan = computeEMIPlan(principal, rate, term)
-        const totalPayable = emiPlan.totalPayable
-        const monthlyInstallment = emiPlan.emi
+        // Reducing balance with equal principal repayments:
+        // the same principal portion every month, interest
+        // on the opening balance, so payments decline.
+        const plan = computeReducingBalancePlan(principal, rate, term)
+        const totalPayable = plan.totalPayable
+        const monthlyInstallment = plan.firstInstallment
 
         if (amountPaid > totalPayable) {
           results.push(
@@ -323,7 +326,7 @@ export async function POST(request: NextRequest) {
           const scheduleRows: Prisma.LoanRepaymentScheduleCreateManyInput[] = []
           for (let n = 1; n <= term; n++) {
             const due = addMonths(startDate, n)
-            const row = emiPlan.rows[n - 1]
+            const row = plan.rows[n - 1]
             scheduleRows.push({
               applicationId: application.id,
               loanId: created.id,
@@ -466,14 +469,15 @@ export async function POST(request: NextRequest) {
               if (state.maxAmountPaid <= 0) break
 
               // A paper file only says how much was collected in total, so
-              // each instalment is booked for the scheduled amount — or the
+              // each instalment is booked for its scheduled amount — or the
               // payoff amount when that is all the loan has left. The
               // arithmetic stays unrounded (like the schedule amounts
               // elsewhere in the app) so a file total rounded to whole
               // shillings still settles whole instalments.
+              const scheduled = plan.rows[n - 1]?.totalAmount ?? monthlyInstallment
               const payment = Math.min(
                 remaining,
-                monthlyInstallment,
+                scheduled,
                 state.maxAmountPaid
               )
               if (payment < 0.01) break
@@ -506,7 +510,7 @@ export async function POST(request: NextRequest) {
                 paidInstallments++
                 break
               }
-              if (payment >= monthlyInstallment - 0.005) paidInstallments++
+              if (payment >= scheduled - 0.005) paidInstallments++
             }
 
             // Money collected that no due instalment can take (for example a

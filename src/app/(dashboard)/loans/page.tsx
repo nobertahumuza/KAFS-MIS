@@ -18,7 +18,7 @@ import RegisterExistingLoansModal from "@/components/loans/RegisterExistingLoans
 import { MetricCard } from "@/components/ui/Card"
 import { formatUGX, formatDate, formatDateTime } from "@/lib/utils"
 import { ROLES } from "@/lib/constants"
-import { computeEMIPlan } from "@/lib/loan-repayment"
+import { computeReducingBalancePlan } from "@/lib/loan-repayment"
 
 interface LoanMember {
   id: number
@@ -617,12 +617,14 @@ export default function LoansPage() {
     d.setMonth(d.getMonth() + 1)
     return d
   })()
-  // EMI on the reducing balance, matching what the
-  // disbursement endpoint books.
-  const disbursePlan = computeEMIPlan(principalAmount, interestRate, duration)
+  // Reducing balance with equal principal repayments,
+  // matching what the disbursement endpoint books.
+  const disbursePlan = computeReducingBalancePlan(principalAmount, interestRate, duration)
   const totalInterest = disbursePlan.totalInterest
   const totalPayable = disbursePlan.totalPayable
-  const monthlyInstallment = disbursePlan.emi
+  const principalPortion = disbursePlan.principalPortion
+  const firstInstallment = disbursePlan.firstInstallment
+  const lastInstallment = disbursePlan.lastInstallment
 
   // Derived payment health of the loan being inspected: overdue / fully paid / partially paid.
   const detailPayStatus: string = (() => {
@@ -961,19 +963,26 @@ export default function LoansPage() {
                       <tr className="border-b border-gray-200 dark:border-gray-700">
                         <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase">#</th>
                         <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase">Due Date</th>
+                        <th className="px-3 py-2 text-right text-xs font-semibold text-gray-500 uppercase">Starting Balance</th>
                         <th className="px-3 py-2 text-right text-xs font-semibold text-gray-500 uppercase">Principal</th>
                         <th className="px-3 py-2 text-right text-xs font-semibold text-gray-500 uppercase">Interest</th>
                         <th className="px-3 py-2 text-right text-xs font-semibold text-gray-500 uppercase">Total</th>
                         <th className="px-3 py-2 text-right text-xs font-semibold text-gray-500 uppercase">Paid</th>
-                        <th className="px-3 py-2 text-right text-xs font-semibold text-gray-500 uppercase">Balance</th>
+                        <th className="px-3 py-2 text-right text-xs font-semibold text-gray-500 uppercase">Ending Balance</th>
                         <th className="px-3 py-2 text-center text-xs font-semibold text-gray-500 uppercase">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-                      {loanDetail.repaymentSchedules.map((s) => (
+                      {loanDetail.repaymentSchedules.map((s, idx) => {
+                        const startingBalance =
+                          idx === 0
+                            ? loanDetail.principalAmount
+                            : loanDetail.repaymentSchedules[idx - 1].balance
+                        return (
                         <tr key={s.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                           <td className="px-3 py-2 text-gray-900 dark:text-gray-100">{s.installmentNo}</td>
                           <td className="px-3 py-2 text-gray-900 dark:text-gray-100">{formatDate(s.dueDate)}</td>
+                          <td className="px-3 py-2 text-right text-gray-900 dark:text-gray-100">{formatUGX(startingBalance)}</td>
                           <td className="px-3 py-2 text-right text-gray-900 dark:text-gray-100">{formatUGX(s.principalAmount)}</td>
                           <td className="px-3 py-2 text-right text-gray-900 dark:text-gray-100">{formatUGX(s.interestAmount)}</td>
                           <td className="px-3 py-2 text-right font-medium text-gray-900 dark:text-gray-100">{formatUGX(s.totalAmount)}</td>
@@ -985,7 +994,8 @@ export default function LoansPage() {
                             </Badge>
                           </td>
                         </tr>
-                      ))}
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -1183,8 +1193,16 @@ export default function LoansPage() {
                 <span className="text-[var(--color-primary)]">{formatUGX(totalPayable)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600 dark:text-gray-400">Monthly Installment</span>
-                <span className="font-semibold">{formatUGX(monthlyInstallment)}</span>
+                <span className="text-gray-600 dark:text-gray-400">Monthly Principal Portion</span>
+                <span className="font-medium">{formatUGX(principalPortion)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600 dark:text-gray-400">First Payment</span>
+                <span className="font-semibold">{formatUGX(firstInstallment)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600 dark:text-gray-400">Last Payment</span>
+                <span className="font-semibold">{formatUGX(lastInstallment)}</span>
               </div>
               {firstDue && (
                 <div className="flex justify-between text-sm">

@@ -13,7 +13,7 @@ import Input from "@/components/ui/Input"
 import Select from "@/components/ui/Select"
 import Modal from "@/components/ui/Modal"
 import { formatUGX, formatDate } from "@/lib/utils"
-import { computeEMIPlan } from "@/lib/loan-repayment"
+import { computeReducingBalancePlan } from "@/lib/loan-repayment"
 
 interface MemberOption {
   id: number
@@ -652,10 +652,11 @@ export default function LoanApplicationsPage() {
                   const amt = parseFloat(wizardData.loanAmount) || 0
                   const rate = parseFloat(wizardData.interestRate) || 10
                   const dur = parseInt(wizardData.loanDuration) || 12
-                  const wizardPlan = computeEMIPlan(amt, rate, dur)
+                  const wizardPlan = computeReducingBalancePlan(amt, rate, dur)
                   const interest = wizardPlan.totalInterest
                   const total = wizardPlan.totalPayable
-                  const monthly = wizardPlan.emi
+                  const monthly = wizardPlan.firstInstallment
+                  const lastMonthly = wizardPlan.lastInstallment
                   return (
                     <>
                       <div className="flex justify-between text-sm">
@@ -667,8 +668,12 @@ export default function LoanApplicationsPage() {
                         <span className="text-[var(--color-primary)]">{formatUGX(total)}</span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Monthly Installment</span>
+                        <span className="text-gray-600">First Installment</span>
                         <span className="font-semibold">{formatUGX(monthly)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Last Installment</span>
+                        <span className="font-semibold">{formatUGX(lastMonthly)}</span>
                       </div>
                     </>
                   )

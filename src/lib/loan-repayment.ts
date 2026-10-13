@@ -212,74 +212,82 @@ export function computeAllocation(
   }
 }
 
-/** One row of the EMI plan. Amounts are rounded to 2 decimals. */
-export interface EMIPlanRow {
+/** One row of the reducing-balance plan. Amounts are rounded to 2 decimals. */
+export interface ReducingPlanRow {
   installmentNo: number
+  /** Balance at the start of the period. */
+  openingBalance: number
   /** Interest charged on the opening balance for this period. */
   interest: number
-  /** Instalment minus the interest for this period. */
+  /** Fixed principal portion (the last row absorbs rounding). */
   principal: number
-  /** Interest + principal — the amount due. */
+  /** Principal portion + interest — the amount due. */
   totalAmount: number
-  /** Balance still owed after this instalment. */
+  /** Balance at the end of the period. */
   balance: number
 }
 
-export interface EMIPlan {
-  /** Fixed monthly instalment. */
-  emi: number
+export interface ReducingPlan {
+  /** Fixed principal portion paid every period. */
+  principalPortion: number
+  /** First period's payment — the highest, as payments decline. */
+  firstInstallment: number
+  /** Final period's payment. */
+  lastInstallment: number
   totalInterest: number
   totalPayable: number
-  rows: EMIPlanRow[]
+  rows: ReducingPlanRow[]
 }
 
 /**
- * Equal Monthly Instalment plan on the reducing balance:
+ * Reducing-balance schedule with equal principal repayments:
  *
- *   EMI = P × r × (1+r)^n / ((1+r)^n − 1)
- *
- * Interest is charged on the opening balance each period, so it
- * falls as the principal is paid down and the principal component
- * of every instalment rises. Amounts are rounded to 2 decimals and
- * the final instalment clears whatever is left, so the loan closes
- * at exactly zero. A zero rate falls back to equal principal
- * instalments.
+ *  - the principal is divided equally across the periods, so the
+ *    same principal portion is paid every month;
+ *  - interest is charged on the opening balance each period, so it
+ *    falls as the principal is paid down and the total payment
+ *    declines with it;
+ *  - the final principal portion is adjusted for rounding so the
+ *    loan closes at exactly zero. A zero rate means every payment
+ *    is just the principal portion.
  */
-export function computeEMIPlan(
+export function computeReducingBalancePlan(
   principal: number,
   monthlyRatePercent: number,
   termMonths: number
-): EMIPlan {
+): ReducingPlan {
   const p = roundMoney(principal)
   const n = Math.max(1, Math.floor(termMonths))
   const r = (monthlyRatePercent || 0) / 100
 
-  const factor = r > 0 ? Math.pow(1 + r, n) : 1
-  const emi = roundMoney(r > 0 ? (p * r * factor) / (factor - 1) : p / n)
+  const portion = roundMoney(p / n)
 
-  const rows: EMIPlanRow[] = []
+  const rows: ReducingPlanRow[] = []
   let opening = p
   let totalInterest = 0
 
   for (let i = 1; i <= n; i++) {
-    const interest = roundMoney(opening * r)
-    const principalPaid =
-      i === n ? opening : roundMoney(emi - interest)
-    const totalAmount = roundMoney(interest + principalPaid)
-    opening = roundMoney(opening - principalPaid)
+    const openingBalance = opening
+    const interest = roundMoney(openingBalance * r)
+    const principalPaid = i === n ? openingBalance : portion
+    const totalAmount = roundMoney(principalPaid + interest)
+    opening = roundMoney(openingBalance - principalPaid)
     totalInterest = roundMoney(totalInterest + interest)
 
     rows.push({
       installmentNo: i,
+      openingBalance,
       interest,
       principal: principalPaid,
       totalAmount,
-      balance: Math.max(0, opening),
+      balance: opening,
     })
   }
 
   return {
-    emi,
+    principalPortion: portion,
+    firstInstallment: rows[0].totalAmount,
+    lastInstallment: rows[rows.length - 1].totalAmount,
     totalInterest,
     totalPayable: roundMoney(p + totalInterest),
     rows,

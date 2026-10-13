@@ -204,22 +204,29 @@ export default function PaymentSchedulePage() {
                   <tr className="border-b border-white/[0.06]">
                     <th className="px-4 py-3 text-left text-xs font-semibold text-white/40 uppercase">#</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-white/40 uppercase">Due Date</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-white/40 uppercase">Starting Balance</th>
                     <th className="px-4 py-3 text-right text-xs font-semibold text-white/40 uppercase">Principal</th>
                     <th className="px-4 py-3 text-right text-xs font-semibold text-white/40 uppercase">Interest</th>
                     <th className="px-4 py-3 text-right text-xs font-semibold text-white/40 uppercase">Total</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-white/40 uppercase">Ending Balance</th>
                     <th className="px-4 py-3 text-right text-xs font-semibold text-white/40 uppercase">Paid</th>
                     <th className="px-4 py-3 text-right text-xs font-semibold text-white/40 uppercase">Fine</th>
                     <th className="px-4 py-3 text-center text-xs font-semibold text-white/40 uppercase">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/[0.04]">
-                  {schedules.map((s) => (
+                  {schedules.map((s, idx) => {
+                    const startingBalance =
+                      idx === 0 ? loanDetail.principalAmount : schedules[idx - 1].balance
+                    return (
                     <tr key={s.id} className="hover:bg-white/[0.02] transition-colors">
                       <td className="px-4 py-3 text-white/70">{s.installmentNo}</td>
                       <td className="px-4 py-3 text-white/70">{formatDate(s.dueDate)}</td>
+                      <td className="px-4 py-3 text-right text-white/70">{formatUGX(startingBalance)}</td>
                       <td className="px-4 py-3 text-right text-white/70">{formatUGX(s.principalAmount)}</td>
                       <td className="px-4 py-3 text-right text-white/70">{formatUGX(s.interestAmount)}</td>
                       <td className="px-4 py-3 text-right font-medium text-white/90">{formatUGX(s.totalAmount)}</td>
+                      <td className="px-4 py-3 text-right text-white/70">{formatUGX(s.balance)}</td>
                       <td className="px-4 py-3 text-right text-emerald-400">{formatUGX(s.amountPaid)}</td>
                       <td className="px-4 py-3 text-right">
                         {(s.fine || 0) > 0 ? (
@@ -238,13 +245,16 @@ export default function PaymentSchedulePage() {
                         </Badge>
                       </td>
                     </tr>
-                  ))}
+                  )
+                  })}
                 </tbody>
                 <tfoot>
                   <tr className="border-t border-white/[0.08]">
-                    <td colSpan={3} className="px-4 py-3 text-xs font-semibold text-white/40 uppercase">Totals</td>
+                    <td colSpan={4} className="px-4 py-3 text-xs font-semibold text-white/40 uppercase">Totals</td>
+                    <td className="px-4 py-3 text-right text-xs font-semibold text-white/40">{formatUGX(schedules.reduce((s, x) => s + x.principalAmount, 0))}</td>
                     <td className="px-4 py-3 text-right text-xs font-semibold text-white/40">{formatUGX(schedules.reduce((s, x) => s + x.interestAmount, 0))}</td>
                     <td className="px-4 py-3 text-right text-sm font-bold text-white/90">{formatUGX(totalScheduled)}</td>
+                    <td />
                     <td className="px-4 py-3 text-right text-sm font-bold text-emerald-400">{formatUGX(totalPaid)}</td>
                     <td className="px-4 py-3 text-right text-sm font-bold text-red-400">{formatUGX(totalFines)}</td>
                     <td />

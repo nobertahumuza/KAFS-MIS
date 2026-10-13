@@ -5,7 +5,7 @@ import Modal from "@/components/ui/Modal"
 import Button from "@/components/ui/Button"
 import Input from "@/components/ui/Input"
 import { formatDate, formatUGX } from "@/lib/utils"
-import { computeEMIPlan } from "@/lib/loan-repayment"
+import { computeReducingBalancePlan } from "@/lib/loan-repayment"
 
 /** One loan exactly as POST /api/loans/import expects it. */
 interface ImportRow {
@@ -114,17 +114,19 @@ export default function RegisterExistingLoansModal({ open, onClose, onImported }
     }
   }, [memberSearch])
 
-  // Live maths for the form — the EMI plan the
-  // registration books on the reducing balance.
+  // Live maths for the form — the reducing-balance
+  // plan the registration books.
   const principal = Number(form.principalAmount) || 0
   const rate = Number(form.interestRate) || 0
   const term = Number(form.termMonths) || 0
   const paidSoFar = Number(form.amountPaid) || 0
-  const emiPlan = computeEMIPlan(principal, rate, term)
-  const totalPayable = emiPlan.totalPayable
-  const monthlyInstallment = emiPlan.emi
+  const plan = computeReducingBalancePlan(principal, rate, term)
+  const totalPayable = plan.totalPayable
+  // Payments decline over the term, so the average
+  // instalment estimates how many have been paid.
+  const averageInstallment = term > 0 ? totalPayable / term : 0
   const instalmentsCovered =
-    monthlyInstallment > 0 ? Math.min(term, Math.floor(paidSoFar / monthlyInstallment)) : 0
+    averageInstallment > 0 ? Math.min(term, Math.floor(paidSoFar / averageInstallment)) : 0
   const startDateObj = form.startDate ? new Date(form.startDate) : null
   const finishesOn = startDateObj && term > 0 ? addMonths(startDateObj, term) : null
 
@@ -289,8 +291,10 @@ export default function RegisterExistingLoansModal({ open, onClose, onImported }
             </p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <div>
-                <p className="text-gray-500">Monthly instalment</p>
-                <p className="font-semibold">{formatUGX(monthlyInstallment)}</p>
+                <p className="text-gray-500">Payments (first → last)</p>
+                <p className="font-semibold">
+                  {formatUGX(plan.firstInstallment)} → {formatUGX(plan.lastInstallment)}
+                </p>
               </div>
               <div>
                 <p className="text-gray-500">Total payable</p>
@@ -308,8 +312,9 @@ export default function RegisterExistingLoansModal({ open, onClose, onImported }
               </div>
             </div>
             <p className="mt-2 text-xs text-gray-500">
-              Interest is booked flat for the term, then charged on the reducing balance as
-              repayments come in. Nothing is sent to the member by SMS.
+              Each instalment pays a fixed portion of the principal plus interest on the
+              balance still owed, so payments decline over the term. Nothing is sent to
+              the member by SMS.
             </p>
           </div>
         )}
