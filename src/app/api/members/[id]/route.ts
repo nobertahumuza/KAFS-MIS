@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { getServerSession } from "@/lib/auth"
+import { ROLES } from "@/lib/constants"
 
 export async function GET(
   request: NextRequest,
@@ -104,6 +106,18 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Admin-only: deleting a member is irreversible.
+    const session = await getServerSession()
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    if (session.user.role !== ROLES.ADMIN) {
+      return NextResponse.json(
+        { error: "Only an administrator can delete a member" },
+        { status: 403 }
+      )
+    }
+
     const { id } = await params
     const memberId = parseInt(id)
 
@@ -116,24 +130,80 @@ export async function DELETE(
       return NextResponse.json({ error: "Member not found" }, { status: 404 })
     }
 
-    const hasLoans = await prisma.loan.count({ where: { memberId } })
-    if (hasLoans > 0) {
+    // Never erase money records. Block deletion when the member has ANY
+    // financial footprint; each relation below cascades from Member, so a
+    // delete here would take the records with it.
+    const footprint = await Promise.all([
+      prisma.loan.count({ where: { memberId } }),
+      prisma.loanApplication.count({ where: { memberId } }),
+      prisma.savingsLedger.count({ where: { memberId } }),
+      prisma.sharesLedger.count({ where: { memberId } }),
+      prisma.fixedAccount.count({ where: { memberId } }),
+      prisma.loanGuarantor.count({ where: { memberId } }),
+      prisma.savingsInterest.count({ where: { memberId } }),
+      prisma.loanAdvance.count({ where: { memberId } }),
+      prisma.membershipFee.count({ where: { memberId } }),
+      prisma.charityDeduction.count({ where: { memberId } }),
+      prisma.serviceFeeDeduction.count({ where: { memberId } }),
+      prisma.memberExpense.count({ where: { memberId } }),
+      prisma.expense.count({ where: { memberId } }),
+      prisma.jointAccountMember.count({ where: { memberId } }),
+    ])
+    const labels = [
+      "loans",
+      "loan applications",
+      "savings transactions",
+      "share records",
+      "fixed accounts",
+      "loan guarantees",
+      "savings interest",
+      "loan advances",
+      "membership fees",
+      "charity deductions",
+      "service fee deductions",
+      "member expenses",
+      "expenses",
+      "joint account memberships",
+    ]
+    const found = labels.filter((_, i) => footprint[i] > 0)
+    if (found.length > 0) {
       return NextResponse.json(
-        { error: "Cannot delete member with existing loans" },
+        {
+          error: `Cannot delete ${member.farmerName}: member has financial records (${found.join(
+            ", "
+          )}). Money records are never deleted.`,
+        },
         { status: 400 }
       )
     }
 
-    const hasSavings = await prisma.savingsLedger.count({ where: { memberId } })
-    if (hasSavings > 0) {
-      return NextResponse.json(
-        { error: "Cannot delete member with existing savings transactions" },
-        { status: 400 }
-      )
-    }
+    await prisma.$transaction(
+      async (tx) => {
+        // audit_trail / sms_logs keep a NO ACTION foreign key to members:
+        // detach (never delete) their rows so the member row can go while the
+        // history stays intact.
+        await tx.auditTrail.updateMany({
+          where: { memberId },
+          data: { memberId: null },
+        })
+        await tx.smsLog.updateMany({
+          where: { memberId },
+          data: { memberId: null },
+        })
+        await tx.customer.deleteMany({ where: { memberId } })
+        await tx.member.delete({ where: { id: memberId } })
 
-    await prisma.customer.deleteMany({ where: { memberId } })
-    await prisma.member.delete({ where: { id: memberId } })
+        await tx.auditTrail.create({
+          data: {
+            actionType: "MemberDelete",
+            description: `Duplicate member ${member.memberCode} (${member.farmerName}) deleted by ${session.user.name || "administrator"}`,
+            recordId: memberId,
+            tableName: "members",
+          },
+        })
+      },
+      { timeout: 60_000, maxWait: 10_000 }
+    )
 
     return NextResponse.json({ message: "Member deleted successfully" })
   } catch (error) {

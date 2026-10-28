@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
 import { Search, Plus, Eye, Edit, Trash2, Users, ChevronLeft, ChevronRight } from "lucide-react"
 import PageHeader from "@/components/ui/PageHeader"
 import Table from "@/components/ui/Table"
@@ -10,6 +11,7 @@ import Button from "@/components/ui/Button"
 import Input from "@/components/ui/Input"
 import Modal from "@/components/ui/Modal"
 import { formatUGX, formatDate } from "@/lib/utils"
+import { ROLES } from "@/lib/constants"
 
 interface Member {
   id: number
@@ -35,6 +37,8 @@ const PAGE_SIZE = 10
 
 export default function MembersPage() {
   const router = useRouter()
+  const { data: session } = useSession()
+  const isAdmin = session?.user?.role === ROLES.ADMIN
   const [members, setMembers] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
@@ -160,21 +164,23 @@ export default function MembersPage() {
           >
             <Edit className="w-4 h-4" />
           </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              handleDelete(item.id as number, item.farmerName as string)
-            }}
-            disabled={deleting === item.id}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
-            title="Delete"
-          >
-            {deleting === item.id ? (
-              <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <Trash2 className="w-4 h-4" />
-            )}
-          </button>
+          {isAdmin && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                handleDelete(item.id as number, item.farmerName as string)
+              }}
+              disabled={deleting === item.id}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
+              title="Delete"
+            >
+              {deleting === item.id ? (
+                <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4" />
+              )}
+            </button>
+          )}
         </div>
       ),
     },

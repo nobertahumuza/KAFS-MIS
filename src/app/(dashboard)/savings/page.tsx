@@ -45,6 +45,14 @@ interface TransactionFormData {
   amount: string
   narration: string
   sendSms: boolean
+  offsetToLoan: boolean
+}
+
+interface OffsetPreview {
+  memberId: number
+  hasActiveLoans: boolean
+  totalPayoff: number
+  loans: { loanId: number; loanCode: string; currentBalance: number; payoff: number }[]
 }
 
 const initialFormData: TransactionFormData = {
@@ -53,6 +61,7 @@ const initialFormData: TransactionFormData = {
   amount: "",
   narration: "",
   sendSms: false,
+  offsetToLoan: true,
 }
 
 const WITHDRAWAL_FEE = 500
@@ -77,6 +86,8 @@ export default function SavingsPage() {
   const [memberOptions, setMemberOptions] = useState<MemberOption[]>([])
   const [memberDropdownOpen, setMemberDropdownOpen] = useState(false)
   const [selectedMemberBalance, setSelectedMemberBalance] = useState<number | null>(null)
+  const [offsetPreview, setOffsetPreview] = useState<OffsetPreview | null>(null)
+  const [successMessage, setSuccessMessage] = useState("")
 
   const fetchTransactions = useCallback(async () => {
     setLoading(true)
@@ -143,6 +154,23 @@ export default function SavingsPage() {
     }
   }, [])
 
+  const fetchOffsetPreview = useCallback(async (memberId: string) => {
+    if (!memberId) {
+      setOffsetPreview(null)
+      return
+    }
+    try {
+      const res = await fetch(`/api/savings/offset-preview?memberId=${memberId}`)
+      if (res.ok) {
+        setOffsetPreview(await res.json())
+      } else {
+        setOffsetPreview(null)
+      }
+    } catch {
+      setOffsetPreview(null)
+    }
+  }, [])
+
   const handleFormChange = (field: keyof TransactionFormData) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
@@ -157,6 +185,7 @@ export default function SavingsPage() {
     setMemberDropdownOpen(false)
     setMemberOptions([])
     fetchMemberBalance(String(member.id))
+    fetchOffsetPreview(String(member.id))
     if (formErrors.memberId) setFormErrors((prev) => ({ ...prev, memberId: undefined }))
   }
 
@@ -191,18 +220,21 @@ export default function SavingsPage() {
           amount,
           narration: form.narration.trim() || null,
           sendSms: form.sendSms,
+          offsetToLoan: form.offsetToLoan,
         }),
       })
 
+      const data = await res.json()
       if (!res.ok) {
-        const data = await res.json()
         throw new Error(data.error || "Transaction failed")
       }
 
+      setSuccessMessage(data.message || `${form.transactionType} processed successfully`)
       setModalOpen(false)
       setForm(initialFormData)
       setMemberSearch("")
       setSelectedMemberBalance(null)
+      setOffsetPreview(null)
       fetchTransactions()
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "An unexpected error occurred")
@@ -287,9 +319,30 @@ export default function SavingsPage() {
 
   const withdrawalAmount = parseFloat(form.amount) || 0
   const totalDeduction = form.transactionType === "Withdrawal" ? withdrawalAmount + WITHDRAWAL_FEE : withdrawalAmount
+  const depositAmount = form.transactionType === "Deposit" ? withdrawalAmount : 0
+  const showOffsetNotice =
+    form.transactionType === "Deposit" && offsetPreview !== null && offsetPreview.hasActiveLoans
+  const amountToLoan =
+    showOffsetNotice && form.offsetToLoan && offsetPreview
+      ? Math.min(depositAmount, offsetPreview.totalPayoff)
+      : 0
+  const amountToSavings = Math.max(0, depositAmount - amountToLoan)
 
   return (
     <div className="space-y-6">
+      {successMessage && (
+        <div className="p-4 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 flex items-start justify-between gap-3">
+          <p className="text-sm text-emerald-700 dark:text-emerald-300">{successMessage}</p>
+          <button
+            type="button"
+            onClick={() => setSuccessMessage("")}
+            className="text-emerald-600 dark:text-emerald-400 hover:opacity-70 transition-opacity"
+            title="Dismiss"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
       <PageHeader
         title="Savings"
         subtitle="Manage member deposits and withdrawals"
@@ -395,6 +448,7 @@ export default function SavingsPage() {
           setForm(initialFormData)
           setMemberSearch("")
           setSelectedMemberBalance(null)
+          setOffsetPreview(null)
           setSubmitError("")
         }}
         title="New Savings Transaction"
@@ -415,6 +469,7 @@ export default function SavingsPage() {
                 setMemberSearch(e.target.value)
                 setForm((prev) => ({ ...prev, memberId: "" }))
                 setSelectedMemberBalance(null)
+                setOffsetPreview(null)
                 setMemberDropdownOpen(true)
               }}
               onFocus={() => setMemberDropdownOpen(true)}
@@ -464,6 +519,61 @@ export default function SavingsPage() {
             placeholder="0"
             min="1"
           />
+
+          {showOffsetNotice && (
+            <div className="space-y-2">
+              <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                <p className="text-sm text-blue-700 dark:text-blue-300">
+                  This member has {offsetPreview!.loans.length} active loan
+                  {offsetPreview!.loans.length > 1 ? "s" : ""} (
+                  {offsetPreview!.loans.map((l) => l.loanCode).join(", ")}). The deposit pays the
+                  loan first (fines → interest → principal); anything left is credited to savings.
+                </p>
+              </div>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.offsetToLoan}
+                  onChange={handleFormChange("offsetToLoan")}
+                  className="w-4 h-4 rounded border-gray-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)]/50"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  Offset deposit to loan first (recommended)
+                </span>
+              </label>
+
+              {depositAmount > 0 && (
+                <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 space-y-1">
+                  {form.offsetToLoan ? (
+                    <>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600 dark:text-gray-400">To Loan (est.)</span>
+                        <span className="text-amber-600 dark:text-amber-400 font-medium">
+                          {formatUGX(amountToLoan)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600 dark:text-gray-400">To Savings</span>
+                        <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                          {formatUGX(amountToSavings)}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 pt-1 border-t border-amber-200 dark:border-amber-700">
+                        Loan payoff amount: {formatUGX(offsetPreview!.totalPayoff)} — final figures
+                        are computed server-side at the time of booking.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Loan offset is off — the full amount will be credited to savings and the loan
+                      stays unchanged.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {form.transactionType === "Withdrawal" && withdrawalAmount > 0 && (
             <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 space-y-1">
@@ -516,6 +626,7 @@ export default function SavingsPage() {
                 setForm(initialFormData)
                 setMemberSearch("")
                 setSelectedMemberBalance(null)
+                setOffsetPreview(null)
               }}
             >
               Cancel
