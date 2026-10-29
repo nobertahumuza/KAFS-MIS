@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { getServerSession } from "@/lib/auth"
 import { generateApplicationCode } from "@/lib/utils"
 import { notifyLoanApplication } from "@/lib/notify"
 import { computeReducingBalancePlan } from "@/lib/loan-repayment"
@@ -70,6 +71,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Middleware guards this too, but a loan application must never be
+    // creatable anonymously even if the guard is bypassed.
+    const session = await getServerSession()
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const body = await request.json()
     const {
       memberId,

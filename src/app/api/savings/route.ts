@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import type { Prisma } from "@prisma/client"
 import prisma from "@/lib/prisma"
+import { getServerSession } from "@/lib/auth"
 import { generateReference } from "@/lib/utils"
 import { smsSavingsDeposit, smsSavingsWithdrawal, smsLoanRepayment } from "@/lib/sms"
 import { notifySavingsDeposit, notifySavingsWithdrawal, notifyLoanRepaid } from "@/lib/notify"
@@ -307,6 +308,13 @@ async function applyDepositToLoans(
 
 export async function POST(request: NextRequest) {
   try {
+    // Money route: staff session required (middleware guards this too, but a
+    // deposit/withdrawal must never be bookable anonymously).
+    const session = await getServerSession()
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const body = await request.json()
     const { memberId, transactionType, amount, narration, sendSms, offsetToLoan } = body
 
