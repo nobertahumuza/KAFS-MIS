@@ -220,7 +220,7 @@ export default function SavingsPage() {
           amount,
           narration: form.narration.trim() || null,
           sendSms: form.sendSms,
-          offsetToLoan: form.offsetToLoan,
+          offsetToLoan: true,
         }),
       })
 
@@ -531,45 +531,27 @@ export default function SavingsPage() {
                 </p>
               </div>
 
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={form.offsetToLoan}
-                  onChange={handleFormChange("offsetToLoan")}
-                  className="w-4 h-4 rounded border-gray-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)]/50"
-                />
-                <span className="text-sm text-gray-700 dark:text-gray-300">
-                  Offset deposit to loan first (recommended)
-                </span>
-              </label>
 
               {depositAmount > 0 && (
                 <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 space-y-1">
-                  {form.offsetToLoan ? (
-                    <>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600 dark:text-gray-400">To Loan (est.)</span>
-                        <span className="text-amber-600 dark:text-amber-400 font-medium">
-                          {formatUGX(amountToLoan)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600 dark:text-gray-400">To Savings</span>
-                        <span className="text-emerald-600 dark:text-emerald-400 font-medium">
-                          {formatUGX(amountToSavings)}
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 pt-1 border-t border-amber-200 dark:border-amber-700">
-                        Loan payoff amount: {formatUGX(offsetPreview!.totalPayoff)} — final figures
-                        are computed server-side at the time of booking.
-                      </p>
-                    </>
-                  ) : (
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      Loan offset is off — the full amount will be credited to savings and the loan
-                      stays unchanged.
+                  <>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600 dark:text-gray-400">To Loan (est.)</span>
+                      <span className="text-amber-600 dark:text-amber-400 font-medium">
+                        {formatUGX(amountToLoan)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600 dark:text-gray-400">To Savings</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                        {formatUGX(amountToSavings)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 pt-1 border-t border-amber-200 dark:border-amber-700">
+                      Loan payoff amount: {formatUGX(offsetPreview!.totalPayoff)} - final figures
+                      are computed server-side at the time of booking.
                     </p>
-                  )}
+                  </>
                 </div>
               )}
             </div>
