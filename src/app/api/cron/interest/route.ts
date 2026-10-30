@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 
-export async function POST(request: NextRequest) {
+export const maxDuration = 60
+
+export async function GET(request: NextRequest) {
   try {
     const now = new Date()
     const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`

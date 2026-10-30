@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { smsLoanFine } from "@/lib/sms"
 
-export async function POST(request: NextRequest) {
+export const maxDuration = 60
+
+export async function GET(request: NextRequest) {
   try {
     const now = new Date()
 
@@ -43,7 +45,7 @@ export async function POST(request: NextRequest) {
       if (overdueDays <= 0) continue
 
       const existingFine = await prisma.loanFine.findFirst({
-        where: { loanId: loan.id, scheduleId: schedule.id },
+        where: { scheduleId: schedule.id },
       })
 
       if (existingFine) continue
