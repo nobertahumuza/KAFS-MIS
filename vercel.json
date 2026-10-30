@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/daily-report",
-      "schedule": "0 14 * * *"
+      "schedule": "55 14 * * *"
     },
     {
       "path": "/api/cron/penalties",
