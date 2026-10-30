@@ -10,7 +10,21 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const today = new Date()
+    const now = new Date()
+
+    // Sunday (SACCO calendar, Africa/Kampala): no report is sent.
+    const kampalaNow = new Date(now.toLocaleString("en-US", { timeZone: "Africa/Kampala" }))
+    if (kampalaNow.getDay() === 0) {
+      await prisma.auditTrail.create({
+        data: {
+          actionType: "SystemReport",
+          description: "Daily report skipped - Sunday (no report sent on Sundays)",
+        },
+      }).catch(() => {})
+      return NextResponse.json({ message: "Skipped - Sunday (no report on Sundays)", skipped: true })
+    }
+
+    const today = new Date(now)
     today.setHours(0, 0, 0, 0)
     const tomorrow = new Date(today)
     tomorrow.setDate(tomorrow.getDate() + 1)
@@ -26,6 +40,8 @@ export async function GET(request: NextRequest) {
       totalLoansResult,
       totalExpensesResult,
       recentTransactions,
+      savingsLedgerToday,
+      loanRepaymentsToday,
     ] = await Promise.all([
       prisma.member.count(),
       prisma.member.count({ where: { registrationDate: { gte: today, lt: tomorrow } } }),
@@ -55,6 +71,16 @@ export async function GET(request: NextRequest) {
         orderBy: { id: "desc" },
         take: 10,
       }),
+      prisma.savingsLedger.findMany({
+        where: { transactionDate: { gte: today, lt: tomorrow } },
+        include: { member: { select: { farmerName: true, memberCode: true } } },
+        orderBy: { id: "desc" },
+      }),
+      prisma.loanRepayment.findMany({
+        where: { paymentDate: { gte: today, lt: tomorrow } },
+        include: { loan: { select: { member: { select: { farmerName: true, memberCode: true } } } } },
+        orderBy: { id: "desc" },
+      }),
     ])
 
     const deposits = depositsResult._sum.amount || 0
@@ -70,6 +96,27 @@ export async function GET(request: NextRequest) {
       amount: Math.abs(t.totalDebit || t.totalCredit || 0),
       date: t.entryDate.toISOString(),
     }))
+
+    // Members who made transactions today (savings + loan repayments).
+    const memberTransactions: Array<{
+      memberName: string
+      memberCode: string
+      type: string
+      amount: number
+    }> = [
+      ...savingsLedgerToday.map((t) => ({
+        memberName: t.member?.farmerName || "Unknown",
+        memberCode: t.member?.memberCode || "",
+        type: t.transactionType,
+        amount: t.amount,
+      })),
+      ...loanRepaymentsToday.map((r) => ({
+        memberName: r.loan?.member?.farmerName || "Unknown",
+        memberCode: r.loan?.member?.memberCode || "",
+        type: "Loan Repayment",
+        amount: r.amountPaid,
+      })),
+    ]
 
     const dateStr = today.toLocaleDateString("en-UG", {
       weekday: "long",
@@ -92,10 +139,11 @@ export async function GET(request: NextRequest) {
       withdrawals,
       loanRepayments,
       recentTransactions: formattedTransactions,
+      memberTransactions,
     })
 
     const result = await sendReportEmail(
-      `KAFS Daily Report — ${dateStr}`,
+      `KAFS Daily Report – ${dateStr}`,
       html
     )
 
@@ -117,12 +165,11 @@ export async function GET(request: NextRequest) {
         loanRepayments,
         activeLoans: activeLoansCount,
         totalExpenses,
+        membersWhoTransacted: memberTransactions.length,
       },
     })
   } catch (error) {
     console.error("Daily report cron error:", error)
-    // Record the failure in the app's audit trail so a missed report
-    // is visible inside the system, not only in the server logs.
     await prisma.auditTrail
       .create({
         data: {

@@ -94,6 +94,12 @@ export function generateReportHTML(data: {
     amount: number
     date: string
   }>
+  memberTransactions?: Array<{
+    memberName: string
+    memberCode: string
+    type: string
+    amount: number
+  }>
 }) {
   return `
 <!DOCTYPE html>
@@ -182,8 +188,29 @@ export function generateReportHTML(data: {
           ${data.recentTransactions.length === 0 ? '<tr><td colspan="3" style="text-align:center;color:#94a3b8;">No transactions</td></tr>' : ""}
         </tbody>
       </table>
+      <div class="section-title">Members Who Transacted Today</div>
+      <table>
+        <thead>
+          <tr><th>Member</th><th>Code</th><th>Type</th><th>Amount</th></tr>
+        </thead>
+        <tbody>
+          ${(data.memberTransactions || [])
+            .map(
+              (t) => `
+            <tr>
+              <td>${t.memberName}</td>
+              <td>${t.memberCode}</td>
+              <td>${t.type}</td>
+              <td class="${["Deposit", "Loan Repayment", "Share Purchase"].includes(t.type) ? "inflow" : "outflow"}">
+                ${["Deposit", "Loan Repayment", "Share Purchase"].includes(t.type) ? "+" : "-"}UGX ${t.amount.toLocaleString()}
+              </td>
+            </tr>`
+            )
+            .join("")}
+          ${(data.memberTransactions || []).length === 0 ? '<tr><td colspan="4" style="text-align:center;color:#94a3b8;">No member transactions</td></tr>' : ""}
+        </tbody>
+      </table>
     </div>
-    <div class="footer">
       <p>Designed by NobTechWorld | For help call 0771 918 116</p>
       <p>This is an automated report from KAFS SACCO Management System</p>
     </div>
