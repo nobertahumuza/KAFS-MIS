@@ -369,6 +369,21 @@ export async function POST(request: NextRequest) {
       Date.now()
     )
 
+    // Look up the withdrawal-fee collection account (KAFS-560) so the 500 fee
+    // can be credited to it atomically with the withdrawal.
+    const feeAccount = await prisma.member.findFirst({
+      where: { memberCode: "KAFS-560" },
+      select: { id: true, memberCode: true },
+    })
+    const feeLastEntry = feeAccount
+      ? await prisma.savingsLedger.findFirst({
+          where: { memberId: feeAccount.id },
+          orderBy: { id: "desc" },
+          select: { balanceAfter: true },
+        })
+      : null
+    const feeBalanceBefore = feeLastEntry?.balanceAfter ?? 0
+
     // All writes (loan offsets + savings ledger + audit) commit together so a
     // failure can never leave a deposit half-applied.
     const result = await prisma.$transaction(async (tx) => {
@@ -380,7 +395,10 @@ export async function POST(request: NextRequest) {
       }
 
       const toSavings = roundMoney(amount - offset.totalApplied)
-      const bal = roundMoney(currentBalance + toSavings)
+      const bal =
+        transactionType === "Deposit"
+          ? roundMoney(currentBalance + toSavings)
+          : roundMoney(currentBalance - amount - withdrawalFee)
 
       // Record the savings leg only for the portion that stays in savings.
       const savingsTx =
@@ -401,6 +419,23 @@ export async function POST(request: NextRequest) {
               },
             })
           : null
+
+      // Credit the UGX 500 withdrawal fee to the withdrawal-fee account
+      // (KAFS-560) so it accumulates there, mirroring the service-fee flow.
+      if (transactionType === "Withdrawal" && feeAccount && withdrawalFee > 0) {
+        const newFeeBalance = roundMoney(feeBalanceBefore + withdrawalFee)
+        await tx.savingsLedger.create({
+          data: {
+            memberId: feeAccount.id,
+            transactionType: "Deposit",
+            amount: withdrawalFee,
+            balanceAfter: newFeeBalance,
+            narration: `Withdrawal fee - ${member.farmerName} (${member.memberCode})`,
+            referenceNumber,
+            transactionDate: asOf,
+          },
+        })
+      }
 
       await tx.auditTrail.create({
         data: {

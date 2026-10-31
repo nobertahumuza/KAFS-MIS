@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
-import { generateMemberCode, generateAccountNo } from "@/lib/utils"
+import { generateMemberCode } from "@/lib/utils"
 import { smsAccountOpening } from "@/lib/sms"
 import { notifyMemberRegistered, notifyAccountOpened } from "@/lib/notify"
 
@@ -118,20 +118,12 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    const lastCustomer = await prisma.customer.findFirst({
-      orderBy: { id: "desc" },
-      select: { accountNo: true },
-    })
-
-    let accNextIndex = 1
-    if (lastCustomer?.accountNo) {
-      const match = lastCustomer.accountNo.match(/(\d+)$/)
-      if (match) accNextIndex = parseInt(match[1]) + 1
-    }
-
+    // The account number is the member code, so both always match (a
+    // separate account sequence produced mismatches, e.g. KAFS-992 with
+    // account KAFS-561).
     await prisma.customer.create({
       data: {
-        accountNo: generateAccountNo(accNextIndex),
+        accountNo: memberCode,
         memberId: member.id,
         fullName: farmerName.trim(),
         gender: gender || "Male",
@@ -147,7 +139,7 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    const accountNo = generateAccountNo(accNextIndex)
+    const accountNo = memberCode
 
     smsAccountOpening(member.id, accountNo, "Savings", 0).catch(() => {})
     notifyMemberRegistered(member.id, farmerName.trim(), memberCode).catch(() => {})
