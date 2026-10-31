@@ -8,6 +8,8 @@ export const maxDuration = 60
 const SERVICE_FEE_AMOUNT = 300
 /** Member registered as the SACCO's service-fee collection account. */
 const FEE_ACCOUNT_CODE = "KAFS-557"
+/** Withdrawal-fee collection account - a system account, never charged a service fee. */
+const WITHDRAWAL_FEE_ACCOUNT_CODE = "KAFS-560"
 const TIME_ZONE = "Africa/Kampala"
 
 /**
@@ -21,7 +23,8 @@ const TIME_ZONE = "Africa/Kampala"
  * Rules:
  *  - Members with less than UGX 300 (or no savings) are skipped - balances
  *    are never driven negative.
- *  - The fee account itself is never charged.
+ *  - The collection accounts (KAFS-557 service fee, KAFS-560 withdrawal fee)
+ *    are never charged a service fee.
  *  - Idempotent: the service_fee_deductions row (member + month + year)
  *    makes a re-run, a duplicated cron trigger or a crash-resume safe.
  *  - No SMS / notifications are sent, per SACCO policy.
@@ -67,7 +70,11 @@ export async function GET(request: NextRequest) {
             status: "Active",
             id: { in: memberIdsParam.split(",").map((v) => parseInt(v.trim())).filter(Number.isFinite) },
           }
-        : { status: "Active", NOT: { id: feeAccount.id } },
+        : {
+            status: "Active",
+            // System collection accounts are never charged a service fee.
+            NOT: { memberCode: { in: [FEE_ACCOUNT_CODE, WITHDRAWAL_FEE_ACCOUNT_CODE] } },
+          },
       select: { id: true, memberCode: true },
       orderBy: { id: "asc" },
     })
