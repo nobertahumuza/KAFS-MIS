@@ -83,6 +83,94 @@ export async function notifyLoanRepaid(memberId: number, memberName: string, amo
   })
 }
 
+/**
+ * Detailed cashier notification for a deposit that was (partly) offset to
+ * loans: how the money was split per loan, what interest/principal/fines it
+ * covered, the new loan balances and the savings remainder.
+ */
+export async function notifyDepositOffset(params: {
+  memberName: string
+  memberCode: string
+  depositAmount: number
+  totalApplied: number
+  savingsCredited: number
+  savingsBalance: number
+  reference: string
+  loans: {
+    loanCode: string
+    amountApplied: number
+    interestPaid: number
+    principalPaid: number
+    finePaid: number
+    newBalance: number
+    loanCleared: boolean
+  }[]
+}) {
+  const loanDetails = params.loans
+    .map(
+      (l) =>
+        `${l.loanCode}: UGX ${l.amountApplied.toLocaleString()} ` +
+        `(interest UGX ${l.interestPaid.toLocaleString()}, principal UGX ${l.principalPaid.toLocaleString()}, fines UGX ${l.finePaid.toLocaleString()}) ` +
+        `→ balance UGX ${l.newBalance.toLocaleString()}${l.loanCleared ? " — CLEARED" : ""}`
+    )
+    .join("; ")
+
+  await createNotification({
+    title: "Deposit offset to loan",
+    message:
+      `${params.memberName} (${params.memberCode}) deposited UGX ${params.depositAmount.toLocaleString()}. ` +
+      `UGX ${params.totalApplied.toLocaleString()} paid to loan: ${loanDetails}. ` +
+      `UGX ${params.savingsCredited.toLocaleString()} credited to savings (balance UGX ${params.savingsBalance.toLocaleString()}). ` +
+      `Ref: ${params.reference}`,
+    severity: "success",
+    notificationType: "deposit_offset",
+    link: `/savings`,
+  })
+}
+
+/**
+ * Cashier notification for one member processed by the auto-repay cron -
+ * exactly how much was taken from savings and where it went.
+ */
+export async function notifyAutoRepay(params: {
+  memberName: string
+  memberCode: string
+  amount: number
+  savingsBalanceBefore: number
+  savingsBalanceAfter: number
+  fullyPaid: boolean
+  reference: string
+  loans: {
+    loanCode: string
+    amountApplied: number
+    interestPaid: number
+    principalPaid: number
+    finePaid: number
+    newBalance: number
+    loanCleared: boolean
+  }[]
+}) {
+  const loanDetails = params.loans
+    .map(
+      (l) =>
+        `${l.loanCode}: UGX ${l.amountApplied.toLocaleString()} ` +
+        `(interest UGX ${l.interestPaid.toLocaleString()}, principal UGX ${l.principalPaid.toLocaleString()}, fines UGX ${l.finePaid.toLocaleString()}) ` +
+        `→ balance UGX ${l.newBalance.toLocaleString()}${l.loanCleared ? " — CLEARED" : ""}`
+    )
+    .join("; ")
+
+  await createNotification({
+    title: params.fullyPaid ? "Auto-repay collected" : "Auto-repay partial (low savings)",
+    message:
+      `${params.memberName} (${params.memberCode}): UGX ${params.amount.toLocaleString()} taken from savings ` +
+      `(UGX ${params.savingsBalanceBefore.toLocaleString()} → UGX ${params.savingsBalanceAfter.toLocaleString()}) ` +
+      `and paid to loan: ${loanDetails}. Ref: ${params.reference}`,
+    severity: params.fullyPaid ? "success" : "warning",
+    notificationType: "loan_auto_repay",
+    link: `/savings`,
+  })
+}
+
 export async function notifyLoanApplication(memberId: number, memberName: string, applicationCode: string, amount: number) {
   await createNotification({
     title: "New Loan Application",

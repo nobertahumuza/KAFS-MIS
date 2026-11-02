@@ -31,7 +31,35 @@ export async function GET(request: NextRequest) {
     })
 
     const asOf = new Date()
+
+    // Unpaid installments per loan: when the next one is due and how much
+    // is already overdue (feeds the deposit-form notice).
+    const schedules = activeLoans.length
+      ? await prisma.loanRepaymentSchedule.findMany({
+          where: {
+            loanId: { in: activeLoans.map((l) => l.id) },
+            status: { in: ["Pending", "Partial"] },
+          },
+          orderBy: { dueDate: "asc" },
+          select: {
+            loanId: true,
+            dueDate: true,
+            totalAmount: true,
+            amountPaid: true,
+          },
+        })
+      : []
+    const byLoan = new Map<number, typeof schedules>()
+    for (const s of schedules) {
+      if (s.loanId === null) continue
+      const list = byLoan.get(s.loanId) ?? []
+      list.push(s)
+      byLoan.set(s.loanId, list)
+    }
+
     let totalPayoff = 0
+    let totalDueNow = 0
+    let anyOverdue = false
     const loans = activeLoans.map((loan) => {
       const pendingFines = roundMoney(
         loan.fines.reduce((sum, f) => sum + (f.fineAmount || 0), 0)
@@ -51,12 +79,31 @@ export async function GET(request: NextRequest) {
         pendingFines
       )
       totalPayoff = roundMoney(totalPayoff + state.maxAmountPaid)
+
+      const unpaid = byLoan.get(loan.id) ?? []
+      const dueNow = roundMoney(
+        unpaid
+          .filter((s) => new Date(s.dueDate) <= asOf)
+          .reduce(
+            (sum, s) =>
+              sum + Math.max(0, (s.totalAmount ?? 0) - (s.amountPaid ?? 0)),
+            0
+          )
+      )
+      const nextDue = unpaid[0]?.dueDate ?? null
+      const overdue = nextDue !== null && new Date(nextDue) <= asOf
+      totalDueNow = roundMoney(totalDueNow + dueNow)
+      if (overdue) anyOverdue = true
+
       return {
         loanId: loan.id,
         loanCode: loan.loanCode,
         currentBalance: loan.currentBalance,
         pendingFines,
         payoff: state.maxAmountPaid,
+        nextDueDate: nextDue ? new Date(nextDue).toISOString().slice(0, 10) : null,
+        dueNow,
+        overdue,
       }
     })
 
@@ -64,6 +111,8 @@ export async function GET(request: NextRequest) {
       memberId,
       hasActiveLoans: loans.length > 0,
       totalPayoff,
+      totalDueNow,
+      anyOverdue,
       loans,
     })
   } catch (error) {

@@ -161,6 +161,52 @@ export async function smsLoanRepayment(memberId: number, amount: number, balance
   }, "Loan Repayment")
 }
 
+/**
+ * One consolidated SMS for a deposit that paid part of it to loans - the
+ * member is told exactly how much went to the loan and how much stayed in
+ * savings (replaces the old per-loan repayment + savings deposit pair).
+ */
+export async function smsDepositOffset(
+  memberId: number,
+  amountReceived: number,
+  amountApplied: number,
+  loanCodes: string,
+  loanBalance: number,
+  amountSaved: number,
+  savingsBalance: number,
+  reference: string
+) {
+  await sendToMember("deposit_offset", memberId, {
+    amount_received: amountReceived.toLocaleString(),
+    amount_applied: amountApplied.toLocaleString(),
+    loan_codes: loanCodes,
+    loan_balance: loanBalance.toLocaleString(),
+    amount_saved: amountSaved.toLocaleString(),
+    savings_balance: savingsBalance.toLocaleString(),
+    reference,
+    time: now(),
+  }, "Deposit Offset")
+}
+
+/** Automatic repayment taken from savings by the auto-repay cron. */
+export async function smsLoanAutoRepay(
+  memberId: number,
+  amount: number,
+  loanCode: string,
+  loanBalance: number,
+  savingsBalance: number,
+  reference: string
+) {
+  await sendToMember("loan_auto_repay", memberId, {
+    amount: amount.toLocaleString(),
+    loan_code: loanCode,
+    balance: loanBalance.toLocaleString(),
+    savings_balance: savingsBalance.toLocaleString(),
+    reference,
+    time: now(),
+  }, "Loan Auto Repay")
+}
+
 export async function smsLoanApproval(memberId: number, applicationCode: string, amount: number) {
   await sendToMember("loan_approval", memberId, {
     application_code: applicationCode,

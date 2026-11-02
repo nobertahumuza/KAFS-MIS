@@ -53,7 +53,17 @@ interface OffsetPreview {
   memberId: number
   hasActiveLoans: boolean
   totalPayoff: number
-  loans: { loanId: number; loanCode: string; currentBalance: number; payoff: number }[]
+  totalDueNow?: number
+  anyOverdue?: boolean
+  loans: {
+    loanId: number
+    loanCode: string
+    currentBalance: number
+    payoff: number
+    nextDueDate?: string | null
+    dueNow?: number
+    overdue?: boolean
+  }[]
 }
 
 const initialFormData: TransactionFormData = {
@@ -541,6 +551,13 @@ export default function SavingsPage() {
                   {offsetPreview!.loans.map((l) => l.loanCode).join(", ")}). The deposit pays the
                   loan first (fines → interest → principal); anything left is credited to savings.
                 </p>
+                {(offsetPreview!.totalDueNow ?? 0) > 0 && (
+                  <p className="text-sm mt-1 font-medium text-blue-800 dark:text-blue-200">
+                    ⚠ Installments due: {formatUGX(offsetPreview!.totalDueNow ?? 0)}
+                    {offsetPreview!.anyOverdue ? " (overdue)" : ""} — with Auto-Repay ON in
+                    Settings these are collected from savings automatically at 10:00 EAT daily.
+                  </p>
+                )}
               </div>
 
 

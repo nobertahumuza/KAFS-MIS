@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
-import type { Prisma } from "@prisma/client"
 import prisma from "@/lib/prisma"
 import { getServerSession } from "@/lib/auth"
 import { generateReference } from "@/lib/utils"
-import { smsSavingsDeposit, smsSavingsWithdrawal, smsLoanRepayment } from "@/lib/sms"
-import { notifySavingsDeposit, notifySavingsWithdrawal, notifyLoanRepaid } from "@/lib/notify"
-import {
-  computeAllocation,
-  computeRepaymentState,
-  roundMoney,
-} from "@/lib/loan-repayment"
+import { smsSavingsDeposit, smsSavingsWithdrawal, smsDepositOffset } from "@/lib/sms"
+import { notifySavingsDeposit, notifySavingsWithdrawal, notifyDepositOffset } from "@/lib/notify"
+import { roundMoney } from "@/lib/loan-repayment"
+import { applyDepositToLoans } from "@/lib/loan-offset"
 import { isCollectionAccount } from "@/lib/collection-accounts"
 
 export async function GET(request: NextRequest) {
@@ -101,210 +97,6 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     )
   }
-}
-
-/**
- * Apply part of a savings deposit to a member's active loans (oldest first).
- *
- * Uses the same reducing-balance engine as manual repayments so an automatic
- * offset books interest/principal identically to what an officer would record.
- * Returns the total applied to loans and a per-loan breakdown. Any amount the
- * loans cannot absorb (because they are cleared) is left for savings.
- */
-async function applyDepositToLoans(
-  tx: Prisma.TransactionClient,
-  memberId: number,
-  amount: number,
-  asOf: Date
-) {
-  const activeLoans = await tx.loan.findMany({
-    where: { memberId, loanStatus: "Active" },
-    orderBy: { disbursementDate: "asc" },
-    include: {
-      repayments: {
-        orderBy: { paymentDate: "desc" },
-        take: 1,
-        select: { paymentDate: true },
-      },
-      fines: {
-        where: { status: "Pending" },
-        orderBy: { createdAt: "asc" },
-        select: { id: true, scheduleId: true, fineAmount: true, paidAmount: true },
-      },
-    },
-  })
-
-  let remaining = roundMoney(amount)
-  let totalApplied = 0
-  const applied: {
-    loanId: number
-    loanCode: string
-    amountApplied: number
-    interestPaid: number
-    principalPaid: number
-    finePaid: number
-    newBalance: number
-    loanCleared: boolean
-  }[] = []
-
-  for (const loan of activeLoans) {
-    if (remaining <= 0) break
-
-    // Fines still owed (a fine may have been partially paid already).
-    const pendingFines = roundMoney(
-      loan.fines.reduce(
-        (sum, f) => sum + Math.max(0, (f.fineAmount || 0) - (f.paidAmount || 0)),
-        0
-      )
-    )
-
-    const balanceInput = {
-      id: loan.id,
-      loanCode: loan.loanCode,
-      principalAmount: loan.principalAmount,
-      interestRate: loan.interestRate,
-      currentBalance: loan.currentBalance,
-      outstandingPrincipal: loan.outstandingPrincipal,
-      disbursementDate: loan.disbursementDate,
-      lastPaymentDate: loan.repayments[0]?.paymentDate ?? null,
-    }
-
-    const state = computeRepaymentState(balanceInput, asOf, pendingFines)
-
-    // Cash this loan can absorb right now: payoff (principal + accrued
-    // interest) plus pending fines, never more than the balance the engine
-    // allows in a single payment. Fines are settled first, mirroring the
-    // officer's manual repayment screen.
-    const cashCap = roundMoney(
-      Math.min(remaining, state.maxAmountPaid + pendingFines, loan.currentBalance)
-    )
-    let finePart = roundMoney(Math.min(pendingFines, cashCap))
-    let amountPart = roundMoney(Math.min(cashCap - finePart, state.maxAmountPaid))
-    if (amountPart <= 0 && finePart > 0) {
-      // The engine books no fine-only payment; pay the loan leg instead and
-      // leave the fines pending for the next payment.
-      finePart = 0
-      amountPart = roundMoney(Math.min(cashCap, state.maxAmountPaid))
-    }
-    if (amountPart <= 0) continue
-
-    const apply = roundMoney(finePart + amountPart)
-
-    const result = computeAllocation(balanceInput, state, {
-      amountPaid: amountPart,
-      finePaid: finePart,
-      paymentDate: asOf,
-    })
-    if (!result.ok) continue
-
-    const allocation = result.allocation
-    const referenceNumber = generateReference("OFFSET", Date.now() + applied.length)
-
-    await tx.loanRepayment.create({
-      data: {
-        loanId: loan.id,
-        amountPaid: amountPart,
-        finePaid: allocation.feePaid,
-        interestPaid: allocation.interestPaid,
-        principalPaid: allocation.principalPaid,
-        balanceAfter: allocation.newBalance,
-        paymentDate: asOf,
-        recordedBy: null,
-        referenceNumber,
-      },
-    })
-
-    await tx.loan.update({
-      where: { id: loan.id },
-      data: {
-        currentBalance: allocation.newBalance,
-        outstandingPrincipal: allocation.newOutstandingPrincipal,
-        ...(allocation.loanCleared ? { loanStatus: "Cleared" } : {}),
-      },
-    })
-
-    // Track how much of the current installment is covered.
-    const currentSchedule = await tx.loanRepaymentSchedule.findFirst({
-      where: { loanId: loan.id, status: { in: ["Pending", "Partial"] } },
-      orderBy: { dueDate: "asc" },
-    })
-    if (currentSchedule) {
-      const paidSoFar = (currentSchedule.amountPaid ?? 0) + amountPart
-      const expected = currentSchedule.totalAmount ?? 0
-      const fullyPaid = expected > 0 ? paidSoFar >= expected : paidSoFar > 0
-      await tx.loanRepaymentSchedule.update({
-        where: { id: currentSchedule.id },
-        data: { amountPaid: paidSoFar, status: fullyPaid ? "Paid" : "Partial" },
-      })
-    }
-
-    // Settle pending fines the offset covered (oldest first; a fine may be
-    // only partially covered, in which case it stays pending).
-    let fineLeft = allocation.feePaid
-    for (const fine of loan.fines) {
-      if (fineLeft <= 0) break
-      const owed = roundMoney(Math.max(0, (fine.fineAmount || 0) - (fine.paidAmount || 0)))
-      if (owed <= 0) continue
-      const pay = roundMoney(Math.min(owed, fineLeft))
-      const paidNow = roundMoney((fine.paidAmount || 0) + pay)
-      await tx.loanFine.update({
-        where: { id: fine.id },
-        data: {
-          paidAmount: paidNow,
-          paidDate: asOf,
-          status: paidNow >= (fine.fineAmount || 0) ? "Paid" : "Pending",
-        },
-      })
-      fineLeft = roundMoney(fineLeft - pay)
-    }
-
-    await tx.auditTrail.create({
-      data: {
-        actionType: "LoanRepayment",
-        description:
-          `Automatic savings offset of UGX ${apply.toLocaleString()} on loan ${loan.loanCode} ` +
-          `(fines UGX ${allocation.feePaid.toLocaleString()}, ` +
-          `interest UGX ${allocation.interestPaid.toLocaleString()}, ` +
-          `principal UGX ${allocation.principalPaid.toLocaleString()})`,
-        amount: apply,
-        memberId,
-        referenceNumber,
-        tableName: "loan_repayments",
-      },
-    })
-
-    applied.push({
-      loanId: loan.id,
-      loanCode: loan.loanCode,
-      amountApplied: apply,
-      interestPaid: allocation.interestPaid,
-      principalPaid: allocation.principalPaid,
-      finePaid: allocation.feePaid,
-      newBalance: allocation.newBalance,
-      loanCleared: allocation.loanCleared,
-    })
-
-    if (allocation.writtenOff > 0) {
-      await tx.auditTrail.create({
-        data: {
-          actionType: "LoanWriteOff",
-          description:
-            `Booked interest of UGX ${allocation.writtenOff.toLocaleString()} written off on loan ` +
-            `${loan.loanCode} because outstanding principal was cleared before all booked interest accrued`,
-          amount: allocation.writtenOff,
-          memberId,
-          referenceNumber,
-          tableName: "loans",
-          recordId: loan.id,
-        },
-      })
-    }
-
-    totalApplied = roundMoney(totalApplied + apply)
-    remaining = roundMoney(remaining - apply)
-  }
-
-  return { totalApplied, applied }
 }
 
 export async function POST(request: NextRequest) {
@@ -469,14 +261,36 @@ export async function POST(request: NextRequest) {
 
     if (transactionType === "Deposit") {
       if (totalApplied > 0) {
-        for (const loan of appliedBreakdown) {
-          smsLoanRepayment(memberId, loan.amountApplied, loan.newBalance, referenceNumber)
-        }
-        notifyLoanRepaid(memberId, member.farmerName, totalApplied, referenceNumber)
-      }
-      if (savingsCredited > 0) {
-        smsSavingsDeposit(memberId, savingsCredited, newBalance, referenceNumber)
-        notifySavingsDeposit(memberId, member.farmerName, savingsCredited, referenceNumber)
+        // One SMS telling the member the deposit money went to the loan, and
+        // one detailed cashier notification breaking the whole transaction
+        // down per loan (interest / principal / fines / new balance).
+        const loanCodes = appliedBreakdown.map((l) => l.loanCode).join(", ")
+        const loanBalance = roundMoney(
+          appliedBreakdown.reduce((sum, l) => sum + l.newBalance, 0)
+        )
+        await smsDepositOffset(
+          memberId,
+          amount,
+          totalApplied,
+          loanCodes,
+          loanBalance,
+          savingsCredited,
+          newBalance,
+          referenceNumber
+        )
+        await notifyDepositOffset({
+          memberName: member.farmerName,
+          memberCode: member.memberCode,
+          depositAmount: amount,
+          totalApplied,
+          savingsCredited,
+          savingsBalance: newBalance,
+          reference: referenceNumber,
+          loans: appliedBreakdown,
+        })
+      } else if (savingsCredited > 0) {
+        await smsSavingsDeposit(memberId, savingsCredited, newBalance, referenceNumber)
+        await notifySavingsDeposit(memberId, member.farmerName, savingsCredited, referenceNumber)
       }
     } else {
       smsSavingsWithdrawal(memberId, amount, newBalance, referenceNumber)

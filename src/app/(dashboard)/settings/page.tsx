@@ -21,6 +21,7 @@ export default function SettingsPage() {
   const [loanInterestRate, setLoanInterestRate] = useState("")
   const [savingsInterestThreshold, setSavingsInterestThreshold] = useState("")
   const [withdrawalFee, setWithdrawalFee] = useState("")
+  const [autoRepayEnabled, setAutoRepayEnabled] = useState(false)
 
   // SMS settings
   const [smsProvider, setSmsProvider] = useState("EgoSMS")
@@ -56,6 +57,7 @@ export default function SettingsPage() {
         setLoanInterestRate(s.loan_interest_rate || "")
         setSavingsInterestThreshold(s.savings_interest_threshold || "")
         setWithdrawalFee(s.withdrawal_fee || "")
+        setAutoRepayEnabled(s.auto_repay_enabled === "true")
 
         setSmsProvider(s.sms_provider || "EgoSMS")
         setSmsApiKey(s.sms_api_key || "")
@@ -96,6 +98,7 @@ export default function SettingsPage() {
         settings.loan_interest_rate = loanInterestRate
         settings.savings_interest_threshold = savingsInterestThreshold
         settings.withdrawal_fee = withdrawalFee
+        settings.auto_repay_enabled = String(autoRepayEnabled)
       } else if (tab === "sms") {
         settings.sms_provider = smsProvider
         settings.sms_api_key = smsApiKey
@@ -273,6 +276,32 @@ export default function SettingsPage() {
               hint="Minimum balance to earn interest"
               min="0"
             />
+
+            <div className="pt-4 border-t border-gray-200 dark:border-gray-700 space-y-2">
+              <div className="flex items-center gap-3">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Auto-Repay Loans from Savings
+                </label>
+                <button
+                  onClick={() => setAutoRepayEnabled(!autoRepayEnabled)}
+                  className={`relative w-11 h-6 rounded-full transition-colors ${
+                    autoRepayEnabled ? "bg-[var(--color-primary)]" : "bg-gray-300 dark:bg-gray-600"
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                      autoRepayEnabled ? "translate-x-5" : ""
+                    }`}
+                  />
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                When ON, due loan installments are collected automatically from each member&apos;s
+                savings every day at 10:00 EAT (before late fees), members get an SMS and you get a
+                notification showing exactly how each transaction was split. Never takes a balance
+                below UGX 0. Off by default.
+              </p>
+            </div>
           </div>
         </Card>
       )}
