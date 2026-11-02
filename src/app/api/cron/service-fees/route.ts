@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { roundMoney } from "@/lib/loan-repayment"
+import { COLLECTION_ACCOUNT_CODES } from "@/lib/collection-accounts"
 
 // The run walks every active member, so give the function a full budget.
 export const maxDuration = 60
@@ -8,8 +9,6 @@ export const maxDuration = 60
 const SERVICE_FEE_AMOUNT = 300
 /** Member registered as the SACCO's service-fee collection account. */
 const FEE_ACCOUNT_CODE = "KAFS-557"
-/** Withdrawal-fee collection account - a system account, never charged a service fee. */
-const WITHDRAWAL_FEE_ACCOUNT_CODE = "KAFS-560"
 const TIME_ZONE = "Africa/Kampala"
 
 /**
@@ -23,8 +22,9 @@ const TIME_ZONE = "Africa/Kampala"
  * Rules:
  *  - Members with less than UGX 300 (or no savings) are skipped - balances
  *    are never driven negative.
- *  - The collection accounts (KAFS-557 service fee, KAFS-560 withdrawal fee)
- *    are never charged a service fee.
+ *  - The collection accounts (KAFS-237 charity fund, KAFS-557 service
+ *    fee, KAFS-560 withdrawal fee) are bank accounts and are never
+ *    charged a service fee.
  *  - Idempotent: the service_fee_deductions row (member + month + year)
  *    makes a re-run, a duplicated cron trigger or a crash-resume safe.
  *  - No SMS / notifications are sent, per SACCO policy.
@@ -72,8 +72,9 @@ export async function GET(request: NextRequest) {
           }
         : {
             status: "Active",
-            // System collection accounts are never charged a service fee.
-            NOT: { memberCode: { in: [FEE_ACCOUNT_CODE, WITHDRAWAL_FEE_ACCOUNT_CODE] } },
+            // The SACCO's own collection accounts are bank accounts and are
+            // never charged a service fee.
+            NOT: { memberCode: { in: [...COLLECTION_ACCOUNT_CODES] } },
           },
       select: { id: true, memberCode: true },
       orderBy: { id: "asc" },

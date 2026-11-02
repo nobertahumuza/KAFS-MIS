@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { excludeCollectionAccounts } from "@/lib/collection-accounts"
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,6 +13,8 @@ export async function GET(request: NextRequest) {
 
     const members = await prisma.member.findMany({
       where: {
+        // Bank accounts are not members - keep them out of pickers.
+        ...excludeCollectionAccounts(),
         OR: [
           { farmerName: { contains: q } },
           { memberCode: { contains: q } },

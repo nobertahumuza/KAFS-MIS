@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { excludeCollectionAccounts } from "@/lib/collection-accounts"
 import { sendReportEmail, generateReportHTML } from "@/lib/email"
 
 export async function POST() {
@@ -12,7 +13,8 @@ export async function POST() {
       totalMembers, totalSavings, totalLoans, activeLoans, totalExpenses,
       newMembers, deposits, withdrawals, loanRepayments, recentTransactions,
     ] = await Promise.all([
-      prisma.member.count(),
+      // Bank accounts are not members - exclude them from the count.
+      prisma.member.count({ where: excludeCollectionAccounts() }),
       prisma.savingsLedger.aggregate({ _sum: { amount: true } }),
       prisma.loan.aggregate({ _sum: { principalAmount: true } }),
       prisma.loan.count({ where: { loanStatus: "Active" } }),

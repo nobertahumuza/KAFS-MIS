@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { requireAuth } from "@/lib/auth"
+import { excludeCollectionAccounts } from "@/lib/collection-accounts"
 
 export async function GET(request: NextRequest) {
   try {
@@ -44,10 +45,10 @@ async function getMemberGrowth(months: { start: Date; end: Date; label: string }
   const data = await Promise.all(
     months.map(async (m) => {
       const newMembers = await prisma.member.count({
-        where: { createdAt: { gte: m.start, lte: m.end } },
+        where: { ...excludeCollectionAccounts(), createdAt: { gte: m.start, lte: m.end } },
       })
       const totalMembers = await prisma.member.count({
-        where: { createdAt: { lte: m.end } },
+        where: { ...excludeCollectionAccounts(), createdAt: { lte: m.end } },
       })
       return {
         month: m.label,

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { excludeCollectionAccounts } from "@/lib/collection-accounts"
 
 export async function GET() {
   try {
@@ -19,7 +20,8 @@ export async function GET() {
       delinquentLoans,
       delinquencyAlerts,
     ] = await Promise.all([
-      prisma.member.count(),
+      // The SACCO's own collection accounts are bank accounts, not members.
+      prisma.member.count({ where: excludeCollectionAccounts() }),
       prisma.customer.count({ where: { status: "Active" } }),
       prisma.savingsLedger.aggregate({ _sum: { amount: true } }),
       prisma.savingsLedger.groupBy({ by: ["memberId"] }).then((groups) => groups.length),

@@ -11,6 +11,7 @@ import Select from "@/components/ui/Select"
 import Modal from "@/components/ui/Modal"
 import { MetricCard } from "@/components/ui/Card"
 import { formatUGX, formatDate, formatDateTime } from "@/lib/utils"
+import { isCollectionAccount } from "@/lib/collection-accounts"
 
 interface MemberOption {
   id: number
@@ -86,6 +87,11 @@ export default function SavingsPage() {
   const [memberOptions, setMemberOptions] = useState<MemberOption[]>([])
   const [memberDropdownOpen, setMemberDropdownOpen] = useState(false)
   const [selectedMemberBalance, setSelectedMemberBalance] = useState<number | null>(null)
+  const [selectedMemberCode, setSelectedMemberCode] = useState<string | null>(null)
+  // The SACCO's own collection accounts are bank accounts and never pay
+  // the withdrawal fee (server enforces this too).
+  const withdrawalFee =
+    selectedMemberCode && isCollectionAccount(selectedMemberCode) ? 0 : WITHDRAWAL_FEE
   const [offsetPreview, setOffsetPreview] = useState<OffsetPreview | null>(null)
   const [successMessage, setSuccessMessage] = useState("")
 
@@ -121,7 +127,9 @@ export default function SavingsPage() {
       return
     }
     try {
-      const res = await fetch(`/api/members?search=${encodeURIComponent(query)}&pageSize=10`)
+      // includeSystem: the SACCO's bank accounts are hidden from member
+      // listings but must stay selectable for deposits/withdrawals.
+      const res = await fetch(`/api/members?search=${encodeURIComponent(query)}&pageSize=10&includeSystem=true`)
       if (res.ok) {
         const data = await res.json()
         setMemberOptions(data.data || [])
@@ -182,6 +190,7 @@ export default function SavingsPage() {
   const handleMemberSelect = (member: MemberOption) => {
     setForm((prev) => ({ ...prev, memberId: String(member.id) }))
     setMemberSearch(`${member.memberCode} - ${member.farmerName}`)
+    setSelectedMemberCode(member.memberCode)
     setMemberDropdownOpen(false)
     setMemberOptions([])
     fetchMemberBalance(String(member.id))
@@ -195,8 +204,11 @@ export default function SavingsPage() {
     const amount = parseFloat(form.amount)
     if (!form.amount || isNaN(amount) || amount <= 0) {
       errors.amount = "Enter a valid amount"
-    } else if (form.transactionType === "Withdrawal" && amount + WITHDRAWAL_FEE > (selectedMemberBalance ?? 0)) {
-      errors.amount = "Insufficient balance (includes UGX 500 fee)"
+    } else if (form.transactionType === "Withdrawal" && amount + withdrawalFee > (selectedMemberBalance ?? 0)) {
+      errors.amount =
+        withdrawalFee > 0
+          ? `Insufficient balance (includes UGX ${WITHDRAWAL_FEE} fee)`
+          : "Insufficient balance"
     }
     setFormErrors(errors)
     return Object.keys(errors).length === 0
@@ -318,7 +330,7 @@ export default function SavingsPage() {
   ]
 
   const withdrawalAmount = parseFloat(form.amount) || 0
-  const totalDeduction = form.transactionType === "Withdrawal" ? withdrawalAmount + WITHDRAWAL_FEE : withdrawalAmount
+  const totalDeduction = form.transactionType === "Withdrawal" ? withdrawalAmount + withdrawalFee : withdrawalAmount
   const depositAmount = form.transactionType === "Deposit" ? withdrawalAmount : 0
   const showOffsetNotice =
     form.transactionType === "Deposit" && offsetPreview !== null && offsetPreview.hasActiveLoans
@@ -565,7 +577,7 @@ export default function SavingsPage() {
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600 dark:text-gray-400">Processing Fee</span>
-                <span className="text-amber-600 dark:text-amber-400">{formatUGX(WITHDRAWAL_FEE)}</span>
+                <span className="text-amber-600 dark:text-amber-400">{formatUGX(withdrawalFee)}</span>
               </div>
               <div className="flex justify-between text-sm font-semibold border-t border-amber-200 dark:border-amber-700 pt-1">
                 <span>Total Deduction</span>
@@ -573,7 +585,7 @@ export default function SavingsPage() {
               </div>
               <div className="flex justify-between text-sm font-semibold text-emerald-600 dark:text-emerald-400 pt-1">
                 <span>Amount Will Be Credited</span>
-                <span>{formatUGX(Math.max(0, withdrawalAmount - WITHDRAWAL_FEE))}</span>
+                <span>{formatUGX(Math.max(0, withdrawalAmount - withdrawalFee))}</span>
               </div>
             </div>
           )}

@@ -10,6 +10,7 @@ import {
   computeRepaymentState,
   roundMoney,
 } from "@/lib/loan-repayment"
+import { isCollectionAccount } from "@/lib/collection-accounts"
 
 export async function GET(request: NextRequest) {
   try {
@@ -354,11 +355,17 @@ export async function POST(request: NextRequest) {
     const asOf = new Date()
 
     if (transactionType !== "Deposit") {
-      withdrawalFee = WITHDRAWAL_FEE
+      // The SACCO's own collection accounts (service fee, withdrawal fee,
+      // charity fund) are bank accounts - they never pay the withdrawal fee.
+      withdrawalFee = isCollectionAccount(member.memberCode) ? 0 : WITHDRAWAL_FEE
       const totalDeduction = amount + withdrawalFee
       if (totalDeduction > currentBalance) {
         return NextResponse.json(
-          { error: `Insufficient balance. Available: UGX ${currentBalance.toLocaleString()}, Required: UGX ${totalDeduction.toLocaleString()} (includes UGX ${WITHDRAWAL_FEE} fee)` },
+          {
+            error:
+              `Insufficient balance. Available: UGX ${currentBalance.toLocaleString()}, Required: UGX ${totalDeduction.toLocaleString()}` +
+              (withdrawalFee > 0 ? ` (includes UGX ${WITHDRAWAL_FEE} fee)` : ""),
+          },
           { status: 400 }
         )
       }

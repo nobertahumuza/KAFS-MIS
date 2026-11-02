@@ -3,6 +3,7 @@ import prisma from "@/lib/prisma"
 import { generateMemberCode } from "@/lib/utils"
 import { smsAccountOpening } from "@/lib/sms"
 import { notifyMemberRegistered, notifyAccountOpened } from "@/lib/notify"
+import { excludeCollectionAccounts } from "@/lib/collection-accounts"
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,8 +11,14 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search") || ""
     const page = parseInt(searchParams.get("page") || "1")
     const pageSize = parseInt(searchParams.get("pageSize") || "20")
+    // The SACCO's own collection accounts are bank accounts, not members,
+    // so they are hidden by default. Tellers that need to transact with one
+    // (savings / transactions pickers) pass includeSystem=true.
+    const includeSystem = searchParams.get("includeSystem") === "true"
 
-    const where: Record<string, unknown> = {}
+    const where: Record<string, unknown> = includeSystem
+      ? {}
+      : excludeCollectionAccounts()
 
     if (search) {
       where.OR = [

@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { roundMoney } from "@/lib/loan-repayment"
+import { COLLECTION_ACCOUNT_CODES } from "@/lib/collection-accounts"
 
 export const maxDuration = 60
 
 const CHARITY_AMOUNT = 6000
 /** Member registered as the SACCO's charity-fund collection account. */
 const CHARITY_ACCOUNT_CODE = "KAFS-237"
-/** System collection accounts - never charged the charity deduction themselves. */
-const COLLECTION_ACCOUNT_CODES = ["KAFS-237", "KAFS-557", "KAFS-560"]
 const TIME_ZONE = "Africa/Kampala"
 
 /**
@@ -57,7 +56,7 @@ export async function GET(request: NextRequest) {
     const members = await prisma.member.findMany({
       where: memberIdsParam
         ? { status: "Active", id: { in: memberIdsParam.split(",").map((v) => parseInt(v.trim())).filter(Number.isFinite) } }
-        : { status: "Active", NOT: { memberCode: { in: COLLECTION_ACCOUNT_CODES } } },
+        : { status: "Active", NOT: { memberCode: { in: [...COLLECTION_ACCOUNT_CODES] } } },
       select: { id: true, memberCode: true },
       orderBy: { id: "asc" },
     })

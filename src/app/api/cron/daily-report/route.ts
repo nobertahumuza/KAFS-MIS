@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { excludeCollectionAccounts } from "@/lib/collection-accounts"
 import { sendReportEmail, generateReportHTML } from "@/lib/email"
 
 export async function GET(request: NextRequest) {
@@ -43,7 +44,8 @@ export async function GET(request: NextRequest) {
       savingsLedgerToday,
       loanRepaymentsToday,
     ] = await Promise.all([
-      prisma.member.count(),
+      // Bank accounts are not members - exclude them from the count.
+      prisma.member.count({ where: excludeCollectionAccounts() }),
       prisma.member.count({ where: { registrationDate: { gte: today, lt: tomorrow } } }),
       prisma.savingsLedger.aggregate({
         where: { transactionType: "Deposit", transactionDate: { gte: today, lt: tomorrow } },

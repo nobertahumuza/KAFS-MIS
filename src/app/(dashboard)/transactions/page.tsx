@@ -129,7 +129,9 @@ export default function TransactionsPage() {
   const searchMembers = useCallback(async (query: string) => {
     if (query.length < 2) { setMemberOptions([]); return }
     try {
-      const res = await fetch(`/api/members?search=${encodeURIComponent(query)}&pageSize=10`)
+      // includeSystem: the SACCO's bank accounts are hidden from member
+      // listings but must stay selectable for deposits/withdrawals.
+      const res = await fetch(`/api/members?search=${encodeURIComponent(query)}&pageSize=10&includeSystem=true`)
       if (res.ok) {
         const data = await res.json()
         setMemberOptions(data.data || [])
