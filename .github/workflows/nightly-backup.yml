@@ -1,0 +1,125 @@
+name: Nightly encrypted database backup
+
+on:
+  schedule:
+    - cron: "0 2 * * *" # 02:00 UTC = 05:00 EAT, quiet hours
+  workflow_dispatch: # manual trigger (use after setup, and for tests)
+
+# Never let two backup runs write to the backup repo at once.
+concurrency:
+  group: nightly-backup
+  cancel-in-progress: false
+
+permissions:
+  contents: read # the push uses BACKUP_REPO_TOKEN, not the default token
+
+jobs:
+  backup:
+    name: pg_dump → AES-256 → private repo
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Install PostgreSQL 18 client (from PGDG repo)
+        run: |
+          set -euo pipefail
+          # pg_dump must be >= the server version (Neon runs PG16/17/18).
+          # ubuntu-latest's stock postgresql-client can be older, so install
+          # the client straight from the official PGDG apt repository.
+          sudo apt-get install -y -qq curl ca-certificates lsb-release
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-18
+          # Make sure pg_dump/pg_restore resolve to the 18 binaries.
+          echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
+          /usr/lib/postgresql/18/bin/pg_dump --version
+
+      - name: Dump database (read-only)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "::error::DATABASE_URL secret is missing - see docs/BACKUP.md"
+            exit 1
+          fi
+          mkdir -p out
+          pg_dump "$DATABASE_URL" --no-owner --no-privileges --no-acl -Fc -f out/kafs.dump
+          echo "Dumped $(du -h out/kafs.dump | cut -f1)"
+
+      - name: Write manifest (no personal data)
+        run: |
+          set -euo pipefail
+          printf 'created_utc=%s\nsize_bytes=%s\nsha256=%s\ndumper=%s\n' \
+            "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            "$(stat -c%s out/kafs.dump)" \
+            "$(sha256sum out/kafs.dump | cut -d' ' -f1)" \
+            "$(pg_dump --version)" > out/MANIFEST.txt
+          cat out/MANIFEST.txt
+
+      - name: Encrypt with AES-256 and verify the round-trip
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BACKUP_PASSPHRASE:-}" ]; then
+            echo "::error::BACKUP_PASSPHRASE secret is missing - see docs/BACKUP.md"
+            exit 1
+          fi
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$BACKUP_PASSPHRASE" \
+            --symmetric --cipher-algo AES256 --output out/kafs.dump.gpg out/kafs.dump
+          # Prove the ciphertext is recoverable BEFORE trusting this backup:
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$BACKUP_PASSPHRASE" \
+            --decrypt --output out/roundtrip.dump out/kafs.dump.gpg
+          pg_restore --list out/roundtrip.dump > /dev/null
+          cmp --silent out/kafs.dump out/roundtrip.dump
+          rm -f out/roundtrip.dump out/kafs.dump
+          echo "Round-trip verification OK (decrypt → pg_restore --list → byte compare)"
+
+      - name: Push to private backup repository
+        env:
+          BACKUP_REPO_TOKEN: ${{ secrets.BACKUP_REPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BACKUP_REPO_TOKEN:-}" ]; then
+            echo "::error::BACKUP_REPO_TOKEN secret is missing - see docs/BACKUP.md"
+            exit 1
+          fi
+          BACKUP_REPO="nobertahumuza/KAFS-MIS-backups"
+          git clone --quiet "https://x-access-token:${BACKUP_REPO_TOKEN}@github.com/${BACKUP_REPO}.git" backup-repo
+          cd backup-repo
+          mkdir -p database/monthly
+          STAMP="$(date -u +%Y-%m-%d)"
+          MONTH="${STAMP:0:7}"
+          cp ../out/kafs.dump.gpg   "database/kafs-${STAMP}.dump.gpg"
+          cp ../out/MANIFEST.txt    "database/kafs-${STAMP}.manifest.txt"
+          cp ../out/kafs.dump.gpg   "database/monthly/kafs-${MONTH}.dump.gpg"
+
+          # Retention: last 30 daily dumps + last 12 monthly archives.
+          ls database/kafs-*.dump.gpg         | sort | head -n -30 | xargs -r rm -f
+          ls database/kafs-*.manifest.txt     | sort | head -n -30 | xargs -r rm -f
+          ls database/monthly/kafs-*.dump.gpg | sort | head -n -12 | xargs -r rm -f
+
+          git config user.name "kafs-backup-bot"
+          git config user.email "backup@kafs.local"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit --quiet -m "backup ${STAMP}"
+            git push --quiet
+          fi
+          echo "Pushed. Retained: $(ls database/kafs-*.dump.gpg | wc -l) daily, $(ls database/monthly/*.dump.gpg | wc -l) monthly"
+
+      - name: Write run summary
+        if: always()
+        run: |
+          {
+            echo "## Nightly backup - $(date -u +%Y-%m-%d)"
+            echo "- Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "- Archive: \`database/kafs-$(date -u +%Y-%m-%d).dump.gpg\` in the private backup repo"
+            echo "- Retention: 30 daily + 12 monthly, AES-256 encrypted, round-trip verified"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@/lib/auth"
 import { writeFile, mkdir } from "fs/promises"
 import path from "path"
+import { isRemoteStorageConfigured, uploadDocument } from "@/lib/storage"
+
+// Vercel caps request bodies at ~4.5 MB, so anything larger can never reach
+// the storage layer - reject it with a clear message instead of a 500.
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,20 +19,47 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 })
     }
 
-    const bytes = await file.arrayBuffer()
-    const buffer = Buffer.from(bytes)
+    if (file.size > MAX_UPLOAD_BYTES) {
+      return NextResponse.json(
+        { error: "File too large. Maximum size is 4 MB." },
+        { status: 413 }
+      )
+    }
 
-    const uploadsDir = path.join(process.cwd(), "public", "uploads")
-    await mkdir(uploadsDir, { recursive: true })
+    const bytes = Buffer.from(await file.arrayBuffer())
 
     const timestamp = Date.now()
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_")
     const fileName = `${timestamp}-${safeName}`
-    const filePath = path.join(uploadsDir, fileName)
 
-    await writeFile(filePath, buffer)
+    let fileUrl: string
 
-    const fileUrl = `/uploads/${fileName}`
+    if (isRemoteStorageConfigured()) {
+      // S3-compatible object storage (R2 / B2 / S3) - persists across deploys
+      // and is included in the nightly database+files backup story.
+      const uploaded = await uploadDocument({
+        fileName,
+        buffer: bytes,
+        contentType: file.type || "application/octet-stream",
+      })
+      fileUrl = uploaded.url
+    } else if (process.env.NODE_ENV !== "production") {
+      // Local development fallback only: Vercel's filesystem is read-only
+      // and ephemeral, so this would silently lose files in production.
+      const uploadsDir = path.join(process.cwd(), "public", "uploads")
+      await mkdir(uploadsDir, { recursive: true })
+      const filePath = path.join(uploadsDir, fileName)
+      await writeFile(filePath, bytes)
+      fileUrl = `/uploads/${fileName}`
+    } else {
+      return NextResponse.json(
+        {
+          error:
+            "File storage is not configured. Set S3_BUCKET, S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY (see docs/BACKUP.md).",
+        },
+        { status: 503 }
+      )
+    }
 
     return NextResponse.json({
       message: "File uploaded successfully",

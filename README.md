@@ -1,5 +1,12 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Backups & disaster recovery
+
+The database (members, NINs, loans, savings) is dumped nightly, encrypted
+with AES-256, verified, and pushed to a private repository by GitHub Actions.
+Setup, restore runbook and the quarterly restore test are documented in
+[`docs/BACKUP.md`](docs/BACKUP.md).
+
 ## Getting Started
 
 First, run the development server:
