@@ -28,8 +28,9 @@ const CRITICAL_TABLES = [
   ["memberDocuments", "MemberDocument"],
   ["charityDeductions", "CharityDeduction"],
   ["serviceFeeDeductions", "ServiceFeeDeduction"],
-  ["settings", "Settings"],
+  ["appSettings", "AppSetting"],
   ["smsTemplates", "SmsTemplate"],
+  ["smsSettings", "SmsSetting"],
 ]
 
 // Tables that must never be empty in a real restore.
@@ -38,7 +39,7 @@ const MUST_BE_NON_EMPTY = new Set([
   "users",
   "loans",
   "savingsLedger",
-  "settings",
+  "appSettings",
   "smsTemplates",
 ])
 
