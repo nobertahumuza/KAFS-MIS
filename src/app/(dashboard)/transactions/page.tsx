@@ -20,7 +20,7 @@ interface MemberOption {
 }
 
 interface Transaction {
-  id: number
+  id: string
   type: string
   memberName: string
   memberCode: string
@@ -36,6 +36,15 @@ interface TransactionSummary {
   totalOutflows: number
   netAmount: number
   transactionCount: number
+}
+
+interface TransactionsResponse {
+  transactions: Transaction[]
+  summary: TransactionSummary
+  displayedCount?: number
+  hasMore?: boolean
+  filtered?: boolean
+  error?: string
 }
 
 function getTransactionBadgeVariant(type: string) {
@@ -80,6 +89,10 @@ export default function TransactionsPage() {
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
   const [showFilters, setShowFilters] = useState(false)
+  const [loadError, setLoadError] = useState("")
+  const [hasMore, setHasMore] = useState(false)
+  const [displayedCount, setDisplayedCount] = useState(0)
+  const [isFiltered, setIsFiltered] = useState(false)
 
   const [modalOpen, setModalOpen] = useState(false)
   const [modalType, setModalType] = useState<"Deposit" | "Withdrawal">("Deposit")
@@ -95,6 +108,7 @@ export default function TransactionsPage() {
 
   const fetchTransactions = useCallback(async () => {
     setLoading(true)
+    setLoadError("")
     try {
       const params = new URLSearchParams()
       if (search) params.set("search", search)
@@ -103,20 +117,33 @@ export default function TransactionsPage() {
       if (dateTo) params.set("dateTo", dateTo)
 
       const res = await fetch(`/api/transactions?${params}`)
-      if (res.ok) {
-        const data = await res.json()
-        setTransactions(data.transactions || [])
-        setSummary(
-          data.summary || {
-            totalInflows: 0,
-            totalOutflows: 0,
-            netAmount: 0,
-            transactionCount: 0,
-          }
-        )
+      const data = (await res.json().catch(() => null)) as TransactionsResponse | null
+
+      if (!res.ok || !data) {
+        // Never let a failed request look like "there are no transactions".
+        setTransactions([])
+        setSummary({ totalInflows: 0, totalOutflows: 0, netAmount: 0, transactionCount: 0 })
+        setLoadError(data?.error || `Failed to load transactions (HTTP ${res.status}).`)
+        return
       }
+
+      setTransactions(data.transactions || [])
+      setSummary(
+        data.summary || {
+          totalInflows: 0,
+          totalOutflows: 0,
+          netAmount: 0,
+          transactionCount: 0,
+        }
+      )
+      setHasMore(Boolean(data.hasMore))
+      setDisplayedCount(data.displayedCount ?? (data.transactions || []).length)
+      setIsFiltered(Boolean(data.filtered))
     } catch (err) {
       console.error("Failed to fetch transactions:", err)
+      setTransactions([])
+      setSummary({ totalInflows: 0, totalOutflows: 0, netAmount: 0, transactionCount: 0 })
+      setLoadError("Network error while loading transactions.")
     } finally {
       setLoading(false)
     }
@@ -322,25 +349,31 @@ export default function TransactionsPage() {
         }
       />
 
+      {loadError && (
+        <div className="p-4 rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20">
+          <p className="text-sm font-medium text-red-800 dark:text-red-200">{loadError}</p>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
-          label="Total Inflows"
+          label={isFiltered ? "Inflows (filtered)" : "Total Inflows"}
           value={formatUGX(summary.totalInflows)}
           icon={<ArrowDownCircle className="w-5 h-5" />}
         />
         <MetricCard
-          label="Total Outflows"
+          label={isFiltered ? "Outflows (filtered)" : "Total Outflows"}
           value={formatUGX(summary.totalOutflows)}
           icon={<ArrowUpCircle className="w-5 h-5" />}
         />
         <MetricCard
-          label="Net Amount"
+          label={isFiltered ? "Net Amount (filtered)" : "Net Amount"}
           value={formatUGX(summary.netAmount)}
           icon={<Wallet className="w-5 h-5" />}
         />
         <MetricCard
-          label="Total Transactions"
-          value={summary.transactionCount}
+          label={isFiltered ? "Transactions (filtered)" : "Total Transactions"}
+          value={summary.transactionCount.toLocaleString()}
           icon={<FileText className="w-5 h-5" />}
         />
       </div>
@@ -414,9 +447,29 @@ export default function TransactionsPage() {
         <Table
           columns={columns}
           data={transactions as unknown as Record<string, unknown>[]}
-          emptyMessage={loading ? "Loading transactions..." : "No transactions found"}
-          emptyIcon={!loading ? <FileText className="w-12 h-12 mb-3 opacity-50" /> : undefined}
+          emptyMessage={loading ? "Loading transactions..." : loadError ? "Transactions could not be loaded" : "No transactions found"}
+          emptyIcon={!loading && !loadError ? <FileText className="w-12 h-12 mb-3 opacity-50" /> : undefined}
         />
+
+        {/* The table is capped server-side; make the cap visible so a short
+            list is never mistaken for the complete ledger. */}
+        {!loading && !loadError && summary.transactionCount > 0 && (
+          <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Showing {displayedCount.toLocaleString()} of{" "}
+              <span className="font-medium text-gray-700 dark:text-gray-300">
+                {summary.transactionCount.toLocaleString()}
+              </span>{" "}
+              transaction{summary.transactionCount === 1 ? "" : "s"}
+              {isFiltered ? " (matching current filters)" : ""} — totals above cover all of them.
+            </p>
+            {hasMore && (
+              <p className="text-xs text-gray-400 dark:text-gray-500">
+                Narrow the date range or search to see older entries.
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       <Modal

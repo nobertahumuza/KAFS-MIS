@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { excludeCollectionAccounts } from "@/lib/collection-accounts"
+import { getTotalSavingsBalance } from "@/lib/savings-totals"
 
 export async function GET() {
   try {
     const [
       totalMembers,
       totalAccounts,
-      savingsAgg,
+      totalSavingsBalance,
       totalActiveSavers,
       loansAgg,
       activeLoans,
@@ -23,7 +24,9 @@ export async function GET() {
       // The SACCO's own collection accounts are bank accounts, not members.
       prisma.member.count({ where: excludeCollectionAccounts() }),
       prisma.customer.count({ where: { status: "Active" } }),
-      prisma.savingsLedger.aggregate({ _sum: { amount: true } }),
+      // Summing savings_ledger.amount counts withdrawals as savings too;
+      // the real balance is each account's latest balanceAfter.
+      getTotalSavingsBalance(),
       prisma.savingsLedger.groupBy({ by: ["memberId"] }).then((groups) => groups.length),
       prisma.loan.aggregate({ _sum: { principalAmount: true, currentBalance: true } }),
       prisma.loan.count({ where: { loanStatus: "Active" } }),
@@ -147,7 +150,7 @@ export async function GET() {
     return NextResponse.json({
       totalMembers,
       totalAccounts,
-      totalSavings: savingsAgg._sum.amount || 0,
+      totalSavings: totalSavingsBalance,
       totalActiveSavers,
       totalLoans: loansAgg._sum.principalAmount || 0,
       totalOutstandingBalance: loansAgg._sum.currentBalance || 0,

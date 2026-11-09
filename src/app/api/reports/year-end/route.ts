@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { requireAuth } from "@/lib/auth"
+import { getTotalSavingsBalance } from "@/lib/savings-totals"
 
 export async function GET() {
   try {
@@ -181,10 +182,9 @@ export async function POST(request: NextRequest) {
 
     const totalMembers = await prisma.member.count({ where: { status: "Active" } })
 
-    const totalSavingsBalanceResult = await prisma.savingsLedger.aggregate({
-      _sum: { balanceAfter: true },
-      where: { transactionDate: { lte: endDate } },
-    })
+    // Summing balanceAfter across every row adds up the whole running-balance
+    // history; the balance at year end is the newest row per account.
+    const totalSavingsBalance = await getTotalSavingsBalance({ asOf: endDate })
 
     const totalLoanOutstandingResult = await prisma.loan.aggregate({
       _sum: { currentBalance: true },
@@ -198,7 +198,7 @@ export async function POST(request: NextRequest) {
 
     const finalBalances = {
       totalMembers,
-      totalSavingsBalance: totalSavingsBalanceResult._sum.balanceAfter ?? 0,
+      totalSavingsBalance,
       totalLoanOutstanding: totalLoanOutstandingResult._sum.currentBalance ?? 0,
       totalShareValue: totalShareValueResult._sum.shareValue ?? 0,
     }

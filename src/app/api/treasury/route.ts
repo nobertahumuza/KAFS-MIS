@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { getTotalSavingsBalance, getTotalSavingsDeposits } from "@/lib/savings-totals"
 
 export async function GET() {
   try {
@@ -7,7 +8,8 @@ export async function GET() {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
 
     const [
-      totalSavings,
+      totalSavingsBalance,
+      totalSavingsDeposits,
       totalFixedDeposits,
       totalLoans,
       activeLoans,
@@ -18,7 +20,8 @@ export async function GET() {
       largeSavings,
       largeLoans,
     ] = await Promise.all([
-      prisma.savingsLedger.aggregate({ _sum: { amount: true } }),
+      getTotalSavingsBalance(),
+      getTotalSavingsDeposits(),
       prisma.fixedAccount.aggregate({ _sum: { principalAmount: true }, where: { status: "Active" } }),
       prisma.loan.aggregate({ _sum: { principalAmount: true } }),
       prisma.loan.aggregate({ _sum: { currentBalance: true }, where: { loanStatus: "Active" } }),
@@ -40,7 +43,8 @@ export async function GET() {
       }),
     ])
 
-    const totalCash = (totalSavings._sum.amount || 0) - (totalLoans._sum.principalAmount || 0)
+    // Money held in member savings minus what has been lent out.
+    const totalCash = totalSavingsBalance - (totalLoans._sum.principalAmount || 0)
 
     const incomeByCategory = savingsByType
       .filter((s) => s.transactionType === "Deposit")
@@ -77,7 +81,8 @@ export async function GET() {
 
     return NextResponse.json({
       totalCash,
-      totalSavingsDeposits: totalSavings._sum.amount || 0,
+      totalSavingsDeposits,
+      totalSavingsBalance,
       totalFixedDeposits: totalFixedDeposits._sum.principalAmount || 0,
       totalLoanPortfolio: totalLoans._sum.principalAmount || 0,
       outstandingBalance: activeLoans._sum.currentBalance || 0,
@@ -93,6 +98,7 @@ export async function GET() {
       {
         totalCash: 0,
         totalSavingsDeposits: 0,
+        totalSavingsBalance: 0,
         totalFixedDeposits: 0,
         totalLoanPortfolio: 0,
         outstandingBalance: 0,

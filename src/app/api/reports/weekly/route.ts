@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { excludeCollectionAccounts } from "@/lib/collection-accounts"
+import { getTotalSavingsBalance } from "@/lib/savings-totals"
 import { sendReportEmail, generateReportHTML } from "@/lib/email"
 
 export async function POST() {
@@ -16,7 +17,8 @@ export async function POST() {
     ] = await Promise.all([
       // Bank accounts are not members - exclude them from the count.
       prisma.member.count({ where: excludeCollectionAccounts() }),
-      prisma.savingsLedger.aggregate({ _sum: { amount: true } }),
+      // Not sum(amount): that adds withdrawals to savings as well.
+      getTotalSavingsBalance(),
       prisma.loan.aggregate({ _sum: { principalAmount: true } }),
       prisma.loan.count({ where: { loanStatus: "Active" } }),
       prisma.expense.aggregate({ _sum: { amount: true }, where: { expenseDate: { gte: startOfMonth } } }),
@@ -39,7 +41,7 @@ export async function POST() {
       title: `Weekly Report (${weekStart} to ${weekEnd})`,
       date: weekEnd,
       totalMembers,
-      totalSavings: totalSavings._sum.amount || 0,
+      totalSavings,
       totalLoans: totalLoans._sum.principalAmount || 0,
       activeLoans,
       totalExpenses: totalExpenses._sum.amount || 0,
