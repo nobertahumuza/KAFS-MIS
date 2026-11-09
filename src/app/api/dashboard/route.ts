@@ -23,7 +23,11 @@ export async function GET() {
     ] = await Promise.all([
       // The SACCO's own collection accounts are bank accounts, not members.
       prisma.member.count({ where: excludeCollectionAccounts() }),
-      prisma.customer.count({ where: { status: "Active" } }),
+      // Must apply the same exclusion, or the 3 collection accounts count as
+      // accounts but not as members (562 vs 559).
+      prisma.customer.count({
+        where: { status: "Active", member: excludeCollectionAccounts() },
+      }),
       // Summing savings_ledger.amount counts withdrawals as savings too;
       // the real balance is each account's latest balanceAfter.
       getTotalSavingsBalance(),
