@@ -40,6 +40,10 @@ const EMPTY_SUMMARY = {
   totalInflows: 0,
   totalOutflows: 0,
   netAmount: 0,
+  // Net with loan disbursements backed out: cash collected vs cash paid out,
+  // ignoring money handed to members as loans (which is a receivable, not a
+  // loss). Keeps the always-negative netAmount from being misread.
+  netBeforeLending: 0,
   transactionCount: 0,
 }
 
@@ -363,6 +367,7 @@ export async function GET(request: Request) {
         totalInflows,
         totalOutflows,
         netAmount: totalInflows - totalOutflows,
+        netBeforeLending: totalInflows - (totalOutflows - loanTotal),
         transactionCount,
       },
       // Lets the client say "showing 200 of 2,835" instead of pretending the

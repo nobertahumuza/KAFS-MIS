@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { Search, ArrowDownCircle, ArrowUpCircle, Wallet, Filter, X, FileText } from "lucide-react"
+import { Search, ArrowDownCircle, ArrowUpCircle, Wallet, HandCoins, Filter, X, FileText } from "lucide-react"
 import PageHeader from "@/components/ui/PageHeader"
 import Table from "@/components/ui/Table"
 import Badge from "@/components/ui/Badge"
@@ -35,6 +35,7 @@ interface TransactionSummary {
   totalInflows: number
   totalOutflows: number
   netAmount: number
+  netBeforeLending: number
   transactionCount: number
 }
 
@@ -81,6 +82,7 @@ export default function TransactionsPage() {
     totalInflows: 0,
     totalOutflows: 0,
     netAmount: 0,
+    netBeforeLending: 0,
     transactionCount: 0,
   })
   const [loading, setLoading] = useState(true)
@@ -122,7 +124,7 @@ export default function TransactionsPage() {
       if (!res.ok || !data) {
         // Never let a failed request look like "there are no transactions".
         setTransactions([])
-        setSummary({ totalInflows: 0, totalOutflows: 0, netAmount: 0, transactionCount: 0 })
+        setSummary({ totalInflows: 0, totalOutflows: 0, netAmount: 0, netBeforeLending: 0, transactionCount: 0 })
         setLoadError(data?.error || `Failed to load transactions (HTTP ${res.status}).`)
         return
       }
@@ -133,6 +135,7 @@ export default function TransactionsPage() {
           totalInflows: 0,
           totalOutflows: 0,
           netAmount: 0,
+          netBeforeLending: 0,
           transactionCount: 0,
         }
       )
@@ -142,7 +145,7 @@ export default function TransactionsPage() {
     } catch (err) {
       console.error("Failed to fetch transactions:", err)
       setTransactions([])
-      setSummary({ totalInflows: 0, totalOutflows: 0, netAmount: 0, transactionCount: 0 })
+      setSummary({ totalInflows: 0, totalOutflows: 0, netAmount: 0, netBeforeLending: 0, transactionCount: 0 })
       setLoadError("Network error while loading transactions.")
     } finally {
       setLoading(false)
@@ -355,7 +358,7 @@ export default function TransactionsPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         <MetricCard
           label={isFiltered ? "Inflows (filtered)" : "Total Inflows"}
           value={formatUGX(summary.totalInflows)}
@@ -370,6 +373,14 @@ export default function TransactionsPage() {
           label={isFiltered ? "Net Amount (filtered)" : "Net Amount"}
           value={formatUGX(summary.netAmount)}
           icon={<Wallet className="w-5 h-5" />}
+        />
+        {/* netAmount is always dragged negative by loan disbursements (money
+            lent out is a receivable, not a loss), so show the cash-only
+            net alongside it instead of letting one number mislead. */}
+        <MetricCard
+          label={isFiltered ? "Net Before Lending (filtered)" : "Net Before Lending"}
+          value={formatUGX(summary.netBeforeLending)}
+          icon={<HandCoins className="w-5 h-5" />}
         />
         <MetricCard
           label={isFiltered ? "Transactions (filtered)" : "Total Transactions"}
